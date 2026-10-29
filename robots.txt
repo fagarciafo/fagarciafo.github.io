@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://fagarciafo.github.io/sitemap.xml

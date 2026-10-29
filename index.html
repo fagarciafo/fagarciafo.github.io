@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="author" content="Freddy Alejandro García Fonseca">
+<link rel="canonical" href="https://fagarciafo.github.io/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2313202F'/%3E%3Ctext x='32' y='42' font-family='Arial,Helvetica,sans-serif' font-size='26' font-weight='800' text-anchor='middle' fill='%23E3B55E'%3EFAG%3C/text%3E%3C/svg%3E">
+<meta property="og:type" content="profile">
+<meta property="og:locale" content="es_CO">
+<meta property="og:title" content="Freddy Alejandro García Fonseca · Metrología y calidad">
+<meta property="og:description" content="Ingeniero electrónico y magíster en metrología. Responsable de Control Metrológico en el Instituto Nacional de Medicina Legal y Ciencias Forenses (Colombia): metrología legal y forense, alcoholimetría, ISO/IEC 17025, gestión de la calidad e IA aplicada.">
+<meta property="og:url" content="https://fagarciafo.github.io/">
+<meta property="profile:first_name" content="Freddy Alejandro">
+<meta property="profile:last_name" content="García Fonseca">
+<meta name="twitter:card" content="summary">
+<title>Freddy Alejandro García Fonseca</title>
+<meta name="description" content="Ingeniero electrónico y magíster en metrología. Responsable de Control Metrológico en el Instituto Nacional de Medicina Legal y Ciencias Forenses (Colombia): metrología legal y forense, alcoholimetría, ISO/IEC 17025, gestión de la calidad e IA aplicada.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Person",
+  "@id": "https://fagarciafo.github.io/#persona",
+  "url": "https://fagarciafo.github.io/",
+  "name": "Freddy Alejandro García Fonseca",
+  "alternateName": "Alejandro García Fonseca",
+  "jobTitle": "Responsable de Control Metrológico",
+  "email": "mailto:freddyalejandrogf@gmail.com",
+  "description": "Ingeniero electrónico y magíster en metrología. Control metrológico, gestión de la calidad e inteligencia artificial aplicada al sector forense.",
+  "worksFor": { "@type": "GovernmentOrganization", "name": "Instituto Nacional de Medicina Legal y Ciencias Forenses" },
+  "address": { "@type": "PostalAddress", "addressCountry": "CO" },
+  "alumniOf": [
+    { "@type": "CollegeOrUniversity", "name": "Universidad Nacional de Colombia" },
+    { "@type": "CollegeOrUniversity", "name": "Universidad Antonio Nariño" },
+    { "@type": "CollegeOrUniversity", "name": "Universidad Militar Nueva Granada" },
+    { "@type": "CollegeOrUniversity", "name": "Universidad Internacional de La Rioja" }
+  ],
+  "knowsAbout": ["Metrología legal", "Metrología forense", "Alcoholimetría", "NTC-ISO/IEC 17025", "NTC-ISO/IEC 17020", "Incertidumbre de medición", "Gestión de la calidad", "Microsoft Power Platform", "Inteligencia artificial aplicada"],
+  "sameAs": [
+    "https://www.linkedin.com/in/freddyalejandrogarcia",
+    "https://scholar.google.com/citations?user=edV-MHkAAAAJ",
+    "https://scienti.minciencias.gov.co/cvlac/visualizador/generarCurriculoCv.do?cod_rh=0001723117"
+  ]
+}
+</script>
+<style>
+/* Layout: hoja técnica de calibración — encabezado, bento de mediciones, regla de años 2011–2026 y fichas por sección */
+:root{
+  --bg:#F1F3F4; --surface:#FFFFFF; --ink:#13202F; --muted:#56616F; --line:#D5DBE0;
+  --brass:#94600E; --brass-soft:#F3E6CB; --steel:#3B5C83; --on-bar:#FFFFFF;
+  --panel:#13202F; --on-panel:#EEF2F5; --on-panel-muted:#A8B5C3; --panel-accent:#E3B55E; --panel-line:#2C3B4D;
+  --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-body:"Source Sans 3","Segoe UI",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D131A; --surface:#151D27; --ink:#E5EAEF; --muted:#9AA6B4; --line:#283442;
+    --brass:#DBA94F; --brass-soft:#33291A; --steel:#87A9D1; --on-bar:#0F151C;
+    --panel:#1B2736; --on-panel:#EEF2F5; --on-panel-muted:#A8B5C3; --panel-accent:#E3B55E; --panel-line:#304054;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D131A; --surface:#151D27; --ink:#E5EAEF; --muted:#9AA6B4; --line:#283442;
+  --brass:#DBA94F; --brass-soft:#33291A; --steel:#87A9D1; --on-bar:#0F151C;
+  --panel:#1B2736; --on-panel:#EEF2F5; --on-panel-muted:#A8B5C3; --panel-accent:#E3B55E; --panel-line:#304054;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+a:focus-visible{outline:2px solid var(--brass);outline-offset:3px;border-radius:4px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0}
+p{margin:0}
+.wrap{max-width:1100px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 56px;display:flex;flex-direction:column;gap:64px}
+
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+
+/* Encabezado */
+.top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px 24px}
+.top nav{display:flex;flex-wrap:wrap;gap:4px 18px}
+.top nav a{font-family:var(--f-mono);font-size:13px;color:var(--muted);text-decoration:none;padding-block:4px}
+.top nav a:hover{color:var(--ink)}
+.hero{display:flex;flex-direction:column;gap:18px;margin-top:-28px}
+.hero h1{font-size:clamp(2.3rem,6.4vw,4.6rem);font-variation-settings:"wdth" 110;font-weight:820;line-height:.98;letter-spacing:-.015em;max-width:15ch}
+.hero .lead{font-size:clamp(1.08rem,2.2vw,1.3rem);color:var(--muted);max-width:58ch}
+.links{display:flex;flex-wrap:wrap;gap:10px}
+.btn{display:inline-flex;align-items:center;gap:8px;font-family:var(--f-mono);font-size:13px;text-decoration:none;padding:9px 14px;border:1px solid var(--line);border-radius:8px;background:var(--surface);transition:border-color .15s}
+.btn:hover{border-color:var(--brass)}
+.btn span{color:var(--brass)}
+
+/* Bento */
+.bento{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.perfil{grid-column:1 / span 8;grid-row:1 / span 2;background:var(--panel);border-color:var(--panel);color:var(--on-panel);padding:28px;gap:18px;justify-content:space-between}
+.perfil .eyebrow{color:var(--panel-accent)}
+.perfil p.texto{font-size:clamp(1.06rem,1.9vw,1.24rem);line-height:1.55;max-width:62ch}
+.perfil .areas{display:flex;flex-wrap:wrap;gap:8px;border-top:1px solid var(--panel-line);padding-top:16px}
+.perfil .areas span{font-family:var(--f-mono);font-size:12px;color:var(--on-panel-muted);border:1px solid var(--panel-line);border-radius:6px;padding:4px 8px}
+.m-a{grid-column:9 / span 4;grid-row:1}
+.m-b{grid-column:9 / span 4;grid-row:2}
+.m{grid-column:span 3}
+.wide{grid-column:span 6}
+.lectura{display:flex;align-items:baseline;gap:8px}
+.valor{font-family:var(--f-display);font-variation-settings:"wdth" 72;font-weight:760;font-size:clamp(2.6rem,5vw,3.4rem);line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.unidad{font-family:var(--f-mono);font-size:13px;color:var(--brass)}
+.tile .etiqueta{color:var(--ink);font-size:15px;line-height:1.4}
+.tile .nota{font-family:var(--f-mono);font-size:12px;color:var(--muted);margin-top:auto}
+.wide h3{font-size:1.05rem;font-variation-settings:"wdth" 100;font-weight:700}
+.wide p{color:var(--muted);font-size:15px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);border-radius:6px;padding:3px 8px;color:var(--ink);background:var(--bg)}
+
+@media (max-width:900px){
+  .bento{grid-template-columns:repeat(6,minmax(0,1fr))}
+  .perfil{grid-column:1 / -1;grid-row:auto}
+  .m-a,.m-b{grid-column:span 2;grid-row:auto}
+  .m{grid-column:span 2}
+  .wide{grid-column:span 3}
+}
+@media (max-width:560px){
+  .bento{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .m-a,.m-b,.m{grid-column:span 1}
+  .wide{grid-column:1 / -1}
+  .perfil{padding:22px}
+  .tile{padding:16px}
+}
+
+/* Secciones */
+section{display:flex;flex-direction:column;gap:24px;scroll-margin-top:16px}
+.sec-head{display:flex;flex-direction:column;gap:8px;border-top:2px solid var(--ink);padding-top:14px}
+.sec-head h2{font-size:clamp(1.6rem,3.4vw,2.2rem);font-variation-settings:"wdth" 108;font-weight:780;letter-spacing:-.01em}
+.sec-head p{color:var(--muted);max-width:62ch}
+
+/* Regla de años */
+.regla{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:10px}
+.carril{display:grid;grid-template-columns:8.5rem minmax(0,1fr);gap:14px;align-items:center}
+.carril .nombre{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.pista{position:relative;height:26px;background-image:linear-gradient(to right,var(--line) 1px,transparent 1px);background-size:calc(100% / 16) 100%;border-right:1px solid var(--line)}
+.barra{position:absolute;top:4px;bottom:4px;border-radius:3px;font-family:var(--f-mono);font-size:11px;line-height:18px;padding-left:6px;white-space:nowrap;overflow:hidden;color:var(--on-bar)}
+.b-ind{background:var(--steel)}
+.b-inm{background:var(--brass)}
+.b-doc{background:var(--steel);opacity:.75}
+.b-coord{background:var(--ink)}
+.b-coord{color:var(--bg)}
+.b-sep{box-shadow:-2px 0 0 var(--surface)}
+.eje{position:relative;height:18px}
+.eje span{position:absolute;top:0;font-family:var(--f-mono);font-size:11px;color:var(--muted);transform:translateX(-50%);font-variant-numeric:tabular-nums}
+.eje span:first-child{transform:none}
+@media (max-width:560px){
+  .carril{grid-template-columns:1fr;gap:4px}
+  .regla{padding:16px}
+}
+
+.cargos{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.cargo{display:grid;grid-template-columns:10.5rem minmax(0,1fr);gap:8px 24px;padding-block:20px;border-bottom:1px solid var(--line)}
+.cargo:first-child{padding-top:4px}
+.cargo .anios{font-family:var(--f-mono);font-size:13px;color:var(--brass);font-variant-numeric:tabular-nums;padding-top:3px}
+.cargo h3{font-size:1.18rem;font-variation-settings:"wdth" 100;font-weight:700}
+.cargo .org{font-family:var(--f-mono);font-size:12.5px;color:var(--muted);margin-top:2px}
+.cargo p.desc{margin-top:8px;max-width:66ch}
+.funciones{margin:10px 0 0;padding-left:1.1em;display:flex;flex-direction:column;gap:4px;max-width:68ch}
+.funciones li::marker{color:var(--brass)}
+.cargo .periodo{margin-top:10px;font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.correo{display:inline-flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden;max-width:100%}
+.correo a{font-family:var(--f-mono);font-size:13px;text-decoration:none;padding:9px 12px;user-select:all;overflow-wrap:anywhere}
+.correo button{font:inherit;font-family:var(--f-mono);font-size:12px;border:0;border-left:1px solid var(--line);background:var(--bg);color:var(--brass);padding:9px 12px;cursor:pointer;white-space:nowrap}
+.correo button:hover{color:var(--ink)}
+.correo button:focus-visible{outline:2px solid var(--brass);outline-offset:-2px}
+.actual{display:inline-block;font-family:var(--f-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--brass);background:var(--brass-soft);border-radius:4px;padding:2px 6px;margin-left:6px;vertical-align:2px}
+@media (max-width:560px){
+  .cargo{grid-template-columns:1fr;gap:4px}
+}
+
+/* Proyectos */
+.proyectos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.proyecto{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.proyecto h3{font-size:1.12rem;font-variation-settings:"wdth" 100;font-weight:700}
+.proyecto p{color:var(--muted);font-size:15px}
+.proyecto .chips{margin-top:auto;padding-top:4px}
+@media (max-width:700px){.proyectos{grid-template-columns:1fr}}
+
+/* Columnas de listas */
+.dos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:40px}
+.dos > div{display:flex;flex-direction:column;gap:12px;min-width:0}
+.dos h3.col{font-family:var(--f-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.lista li{display:grid;grid-template-columns:6.5rem minmax(0,1fr);gap:4px 16px;padding-block:14px;border-top:1px solid var(--line)}
+.lista .anio{font-family:var(--f-mono);font-size:13px;color:var(--brass);font-variant-numeric:tabular-nums;padding-top:2px}
+.lista strong{font-weight:600;display:block}
+.lista .det{color:var(--muted);font-size:15px}
+.lista .chips{margin-top:8px}
+@media (max-width:760px){.dos{grid-template-columns:1fr;gap:32px}}
+@media (max-width:420px){.lista li{grid-template-columns:1fr}}
+
+/* Pie */
+footer{display:flex;flex-direction:column;gap:18px;border-top:2px solid var(--ink);padding-top:16px}
+footer .control{font-family:var(--f-mono);font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 18px}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <span class="eyebrow">Hoja de vida · Bogotá, Colombia</span>
+    <nav aria-label="Secciones">
+      <a href="#trayectoria">Trayectoria</a>
+      <a href="#proyectos">Proyectos</a>
+      <a href="#docencia">Docencia</a>
+      <a href="#formacion">Formación</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <h1>Freddy Alejandro García Fonseca</h1>
+    <p class="lead">Ingeniero electrónico y magíster en metrología. Responsable de Control Metrológico de la Dirección Regional Oriente del Instituto Nacional de Medicina Legal y Ciencias Forenses, con formación en gestión de la calidad y uso aplicado de la inteligencia artificial.</p>
+    <div class="links">
+      <a class="btn" href="https://www.linkedin.com/in/freddyalejandrogarcia" target="_blank" rel="noopener">LinkedIn <span>↗</span></a>
+      <a class="btn" href="https://scholar.google.com/citations?user=edV-MHkAAAAJ" target="_blank" rel="noopener">Google Académico <span>↗</span></a>
+      <a class="btn" href="https://scienti.minciencias.gov.co/cvlac/visualizador/generarCurriculoCv.do?cod_rh=0001723117" target="_blank" rel="noopener">CvLAC · Minciencias <span>↗</span></a>
+      <span class="correo"><a id="mail-hero" href="mailto:freddyalejandrogf@gmail.com">freddyalejandrogf@gmail.com</a><button type="button" data-copy="freddyalejandrogf@gmail.com" data-target="mail-hero">Copiar</button></span>
+    </div>
+  </div>
+
+  <div class="bento" aria-label="Resumen">
+    <div class="tile perfil">
+      <span class="eyebrow">Perfil</span>
+      <p class="texto">Trabajo en metrología desde 2011. Empecé calibrando alcohosensores y equipos de detección de gases, y desde 2015 estoy en el Instituto Nacional de Medicina Legal y Ciencias Forenses, donde coordiné el Grupo Nacional de Metrología Forense y he sido responsable del control metrológico en las regionales Bogotá y Oriente. Hoy combino esa base técnica con la gestión de la calidad y con herramientas digitales e IA que automatizan el seguimiento de procesos.</p>
+      <div class="areas">
+        <span>Metrología legal</span><span>Metrología forense</span><span>Alcoholimetría</span><span>ISO/IEC 17025</span><span>Incertidumbre de medición</span>
+      </div>
+    </div>
+
+    <div class="tile m-a">
+      <div class="lectura"><span class="valor">15</span><span class="unidad">años</span></div>
+      <p class="etiqueta">en metrología y calibración</p>
+      <p class="nota">desde 2011</p>
+    </div>
+    <div class="tile m-b">
+      <div class="lectura"><span class="valor">5</span><span class="unidad">años</span></div>
+      <p class="etiqueta">coordinando el Grupo Nacional de Metrología Forense</p>
+      <p class="nota">2017 – 2023</p>
+    </div>
+    <div class="tile m">
+      <div class="lectura"><span class="valor">11</span><span class="unidad">años</span></div>
+      <p class="etiqueta">como docente en alcoholimetría</p>
+      <p class="nota">desde 2015</p>
+    </div>
+    <div class="tile m">
+      <div class="lectura"><span class="valor">2</span><span class="unidad">países</span></div>
+      <p class="etiqueta">donde he enseñado</p>
+      <p class="nota">Colombia y Guatemala</p>
+    </div>
+    <div class="tile m">
+      <div class="lectura"><span class="valor">6</span><span class="unidad">conceptos</span></div>
+      <p class="etiqueta">técnicos para normas de ICONTEC</p>
+      <p class="nota">NTC y GTC</p>
+    </div>
+    <div class="tile m">
+      <div class="lectura"><span class="valor">3</span><span class="unidad">posgrados</span></div>
+      <p class="etiqueta">en metrología, calidad y proyectos tecnológicos</p>
+      <p class="nota">2016 – 2026</p>
+    </div>
+
+    <div class="tile wide">
+      <h3>Normas con las que trabajo</h3>
+      <div class="chips">
+        <span class="chip">NTC-ISO/IEC 17025</span><span class="chip">NTC-ISO/IEC 17020</span><span class="chip">ISO 9001</span><span class="chip">GTC-ISO/IEC 98-3 (incertidumbre)</span><span class="chip">Metrología legal</span><span class="chip">VIM</span><span class="chip">Sistema Internacional de Unidades</span>
+      </div>
+    </div>
+    <div class="tile wide">
+      <h3>Inteligencia artificial aplicada</h3>
+      <p>Diseño apps y flujos que leen documentos, generan registros y avisan a los responsables, para que el seguimiento de procesos deje de depender del Excel y el correo.</p>
+      <div class="chips">
+        <span class="chip">Power Apps</span><span class="chip">Power Automate</span><span class="chip">SharePoint</span><span class="chip">AI Builder</span><span class="chip">Asistentes de IA</span>
+      </div>
+    </div>
+  </div>
+
+  <section id="trayectoria" aria-labelledby="h-tray">
+    <div class="sec-head">
+      <span class="eyebrow">2011 – 2026</span>
+      <h2 id="h-tray">Trayectoria</h2>
+    </div>
+
+    <div class="regla" role="img" aria-label="Línea de tiempo de 2011 a 2026: industria de 2011 a 2015; Medicina Legal desde diciembre de 2015, con coordinación del Grupo Nacional de Metrología entre 2017 y 2023; docencia desde 2015.">
+      <div class="carril">
+        <span class="nombre">Industria</span>
+        <div class="pista">
+          <div class="barra b-ind" style="left:3.125%;width:20.06%" title="RQC Solutions · jul 2011 – sep 2014">RQC</div>
+          <div class="barra b-ind" style="left:25.5%;width:5.25%" title="AW Electrónica · feb – dic 2015"></div>
+        </div>
+      </div>
+      <div class="carril">
+        <span class="nombre">Medicina Legal</span>
+        <div class="pista">
+          <div class="barra b-inm" style="left:30.75%;width:37.5%" title="Regional Bogotá y Grupo de Metrología · dic 2015 – nov 2021">Regional Bogotá</div>
+          <div class="barra b-inm b-sep" style="left:68.25%;width:9.74%" title="Grupo Nacional de Metrología · dic 2021 – jun 2023"></div>
+          <div class="barra b-inm b-sep" style="left:77.99%;width:10.51%" title="Control Metrológico, Regional Bogotá · jun 2023 – feb 2025"></div>
+          <div class="barra b-inm b-sep" style="left:88.5%;width:3.94%" title="Genética Forense, Regional Bogotá · feb – oct 2025"></div>
+          <div class="barra b-inm b-sep" style="left:92.44%;width:6.5%" title="Control Metrológico, Regional Oriente · oct 2025 – actual"></div>
+        </div>
+      </div>
+      <div class="carril">
+        <span class="nombre">Coordinación GNMET</span>
+        <div class="pista">
+          <div class="barra b-coord" style="left:42.81%;width:21.75%" title="Coordinación del Grupo Nacional de Metrología Forense · nov 2017 – abr 2021">GNMET</div>
+          <div class="barra b-coord" style="left:69.25%;width:8.88%" title="Coordinación del Grupo Nacional de Metrología Forense · feb 2022 – jun 2023"></div>
+        </div>
+      </div>
+      <div class="carril">
+        <span class="nombre">Docencia</span>
+        <div class="pista">
+          <div class="barra b-doc" style="left:25%;width:73.94%" title="Docencia en alcoholimetría · 2015 – actual">Docencia</div>
+        </div>
+      </div>
+      <div class="carril">
+        <span class="nombre" aria-hidden="true"></span>
+        <div class="eje" aria-hidden="true">
+          <span style="left:0">2011</span>
+          <span style="left:25%">2015</span>
+          <span style="left:56.25%">2020</span>
+          <span style="left:87.5%">2025</span>
+        </div>
+      </div>
+    </div>
+
+    <ol class="cargos">
+      <li class="cargo">
+        <span class="anios">oct 2025 – actual</span>
+        <div>
+          <h3>Responsable de Control Metrológico <span class="actual">Actual</span></h3>
+          <p class="org">Profesional Especializado Forense · Dirección Regional Oriente · INMLCF</p>
+          <ul class="funciones">
+            <li>Aseguramiento y confirmación metrológica de los equipos de los servicios forenses de la regional.</li>
+            <li>Planes de verificación intermedia de equipos críticos, basados en el análisis de riesgo metrológico.</li>
+            <li>Calibraciones, trazabilidad a patrones de referencia e instructivos de verificación para equipos sujetos a metrología legal.</li>
+            <li>Seguimiento al mantenimiento preventivo, transferencia de conocimiento metrológico al personal técnico y revisión de la documentación del Sistema Integrado de Gestión.</li>
+          </ul>
+        </div>
+      </li>
+      <li class="cargo">
+        <span class="anios">feb – oct 2025</span>
+        <div>
+          <h3>Profesional Especializado Forense</h3>
+          <p class="org">Grupo de Genética Forense · Dirección Regional Bogotá · INMLCF</p>
+          <ul class="funciones">
+            <li>Implementación del aseguramiento y control metrológico de los equipos del laboratorio.</li>
+            <li>Apoyo a la validez de los resultados, los ensayos de aptitud y la validación de métodos bajo NTC-ISO/IEC 17025.</li>
+          </ul>
+        </div>
+      </li>
+      <li class="cargo">
+        <span class="anios">jun 2023 – feb 2025</span>
+        <div>
+          <h3>Responsable de Control Metrológico</h3>
+          <p class="org">Profesional Especializado Forense · Dirección Regional Bogotá · INMLCF</p>
+          <ul class="funciones">
+            <li>Administración de los patrones de referencia de metrología física y prestación de servicios de calibración acreditados.</li>
+            <li>Aprobación de certificados de calibración y validación de los métodos de calibración.</li>
+            <li>Determinación de necesidades metrológicas y documentación de la trazabilidad de los equipos de medición.</li>
+            <li>Capacitación a usuarios de instrumentos de medición, estudios previos de contratación, supervisión de contratos y proyecto de inversión.</li>
+          </ul>
+        </div>
+      </li>
+      <li class="cargo">
+        <span class="anios">nov 2017 – jun 2023</span>
+        <div>
+          <h3>Coordinador del Grupo Nacional de Metrología Forense</h3>
+          <p class="org">Subdirección de Servicios Forenses · alcance nacional · INMLCF</p>
+          <ul class="funciones">
+            <li>Coordinación con direcciones regionales, seccionales y unidades básicas de los planes y proyectos de metrología forense.</li>
+            <li>Propuesta de políticas y estrategias para el servicio y control del cumplimiento de los lineamientos científicos y técnicos.</li>
+            <li>Conceptos técnico-científicos, cooperación interinstitucional nacional e internacional y necesidades de capacitación, investigación y normalización.</li>
+            <li>Apoyo a la formulación de los criterios técnico-científicos para la certificación de peritos.</li>
+          </ul>
+          <p class="periodo">Periodos: nov 2017 – abr 2021 y feb 2022 – jun 2023. Profesional Especializado Forense del grupo desde diciembre de 2021.</p>
+        </div>
+      </li>
+      <li class="cargo">
+        <span class="anios">dic 2015 – nov 2017</span>
+        <div>
+          <h3>Profesional Universitario Forense</h3>
+          <p class="org">Grupo de Metrología · Dirección Regional Bogotá · INMLCF</p>
+          <ul class="funciones">
+            <li>Ingreso al Instituto el 4 de diciembre de 2015.</li>
+            <li>Participación en el Sistema de Gestión de Calidad, en estudios técnicos y en los programas docentes del área.</li>
+          </ul>
+        </div>
+      </li>
+      <li class="cargo">
+        <span class="anios">feb – dic 2015</span>
+        <div>
+          <h3>Ingeniero de Soporte Técnico</h3>
+          <p class="org">AW Electrónica</p>
+          <p class="desc">Calibración y mantenimiento de alcohosensores y equipos de detección de gases.</p>
+        </div>
+      </li>
+      <li class="cargo">
+        <span class="anios">jul 2011 – sep 2014</span>
+        <div>
+          <h3>Ingeniero de Soporte Técnico</h3>
+          <p class="org">RQC Solutions</p>
+          <p class="desc">Calibración y mantenimiento de alcohosensores y equipos de detección de gases.</p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <section id="proyectos" aria-labelledby="h-proy">
+    <div class="sec-head">
+      <span class="eyebrow">Digitalización de procesos</span>
+      <h2 id="h-proy">Herramientas que he construido</h2>
+      <p>Apps y flujos diseñados para la Dirección Regional Oriente. Aquí se describen sin datos internos.</p>
+    </div>
+    <div class="proyectos">
+      <article class="proyecto">
+        <h3>Seguimiento al Sistema Integrado de Gestión</h3>
+        <p>Una sola app para riesgos, plan operativo, auditorías, evaluaciones del ONAC, encuestas de satisfacción, acciones de mejora e indicadores, con los datos del año cargados desde el software de gestión.</p>
+        <div class="chips"><span class="chip">Power Apps</span><span class="chip">SharePoint</span></div>
+      </article>
+      <article class="proyecto">
+        <h3>Control de oficios</h3>
+        <p>Consecutivo automático y trazabilidad de las comunicaciones oficiales: destinatario, dependencia, asunto y responsable, con el directorio institucional integrado.</p>
+        <div class="chips"><span class="chip">Power Apps</span><span class="chip">Office 365</span><span class="chip">SharePoint</span></div>
+      </article>
+      <article class="proyecto">
+        <h3>Control de recibos de servicios públicos</h3>
+        <p>Seguimiento por sede y por mes de energía, acueducto y aseo. La IA lee el valor y la fecha de vencimiento de cada recibo y la persona solo confirma o corrige.</p>
+        <div class="chips"><span class="chip">Power Apps</span><span class="chip">AI Builder</span><span class="chip">SharePoint</span></div>
+      </article>
+      <article class="proyecto">
+        <h3>Gestión vehicular</h3>
+        <p>Chequeo preoperacional y solicitudes de mantenimiento de los vehículos. Cada registro genera un PDF y la solicitud llega directamente al jefe de la seccional del conductor.</p>
+        <div class="chips"><span class="chip">Microsoft Forms</span><span class="chip">Power Automate</span><span class="chip">SharePoint</span></div>
+      </article>
+    </div>
+  </section>
+
+  <section id="docencia" aria-labelledby="h-doc">
+    <div class="sec-head">
+      <span class="eyebrow">Transferencia de conocimiento</span>
+      <h2 id="h-doc">Docencia, normalización y ponencias</h2>
+    </div>
+    <div class="dos">
+      <div>
+        <h3 class="col">Docencia y ponencias</h3>
+        <ul class="lista">
+          <li>
+            <span class="anio">2015 – actual</span>
+            <div>
+              <strong>Cursos de medición indirecta de alcoholemia en aire expirado</strong>
+              <span class="det">Academia de Peritos Forenses con la Universidad Autónoma Latinoamericana, Fundación Universitaria de Ciencias de la Salud (FUCS) y Corporación Alejandría con la Universidad Nacional.</span>
+            </div>
+          </li>
+          <li>
+            <span class="anio">2022</span>
+            <div>
+              <strong>Ponencia «Retos en la medición de alcohol en aire expirado»</strong>
+              <span class="det">METROCOL 2022, Congreso Internacional de Metrología (SIC – INM).</span>
+            </div>
+          </li>
+          <li>
+            <span class="anio">2021</span>
+            <div>
+              <strong>Docencia internacional</strong>
+              <span class="det">Centro Nacional de Metrología de Guatemala (CENAME).</span>
+            </div>
+          </li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="col">Normalización y acreditación</h3>
+        <ul class="lista">
+          <li>
+            <span class="anio">ICONTEC</span>
+            <div>
+              <strong>Miembro del Comité Técnico Sectorial de Normalización en Metrología</strong>
+            </div>
+          </li>
+          <li>
+            <span class="anio">ONAC</span>
+            <div>
+              <strong>Experto técnico del Grupo Técnico Asesor</strong>
+              <span class="det">Criterios de acreditación para la verificación metrológica de alcohosensores.</span>
+            </div>
+          </li>
+          <li>
+            <span class="anio">ICONTEC</span>
+            <div>
+              <strong>Conceptos técnicos sobre proyectos de norma</strong>
+              <div class="chips">
+                <span class="chip">NTC 4494</span><span class="chip">NTC-ISO 13528</span><span class="chip">GTC 403</span><span class="chip">NTC 4476</span><span class="chip">GTC-ISO/IEC 98-3-1</span><span class="chip">Incertidumbre de medición, parte 1</span>
+              </div>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="formacion" aria-labelledby="h-form">
+    <div class="sec-head">
+      <span class="eyebrow">Educación</span>
+      <h2 id="h-form">Formación y certificaciones</h2>
+    </div>
+    <div class="dos">
+      <div>
+        <h3 class="col">Formación académica</h3>
+        <ul class="lista">
+          <li><span class="anio">2026</span><div><strong>Máster en Metrología</strong><span class="det">Universidad Antonio Nariño</span></div></li>
+          <li><span class="anio">2017</span><div><strong>Especialista en Gerencia de la Calidad</strong><span class="det">Universidad Militar Nueva Granada</span></div></li>
+          <li><span class="anio">2016</span><div><strong>Máster en Diseño y Gestión de Proyectos Tecnológicos</strong><span class="det">Universidad Internacional de La Rioja (UNIR)</span></div></li>
+          <li><span class="anio">2011</span><div><strong>Ingeniero Electrónico</strong><span class="det">Universidad Nacional de Colombia</span></div></li>
+          <li><span class="anio">2011</span><div><strong>Especialidad en Seguridad de Redes de Computadores</strong><span class="det">SENA</span></div></li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="col">Certificaciones</h3>
+        <ul class="lista">
+          <li><span class="anio">2022</span><div><strong>Diplomado en Métodos Estadísticos</strong><span class="det">Universidad Central</span></div></li>
+          <li><span class="anio">2019</span><div><strong>Diplomado en Metrología</strong><span class="det">Instituto Nacional de Metrología (INM)</span></div></li>
+          <li><span class="anio">2018</span><div><strong>Actualización ISO/IEC 17025:2017</strong><span class="det">ICONTEC</span></div></li>
+          <li><span class="anio">2017</span><div><strong>Auditor interno de sistemas de gestión integrados</strong><span class="det">ISO 9001, ISO 14001 y OHSAS 18001 · SGS</span></div></li>
+          <li><span class="anio">2017</span><div><strong>Calibración de alcohosensores</strong><span class="det">ACS</span></div></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="links">
+      <a class="btn" href="https://www.linkedin.com/in/freddyalejandrogarcia" target="_blank" rel="noopener">LinkedIn <span>↗</span></a>
+      <a class="btn" href="https://scholar.google.com/citations?user=edV-MHkAAAAJ" target="_blank" rel="noopener">Google Académico <span>↗</span></a>
+      <a class="btn" href="https://scienti.minciencias.gov.co/cvlac/visualizador/generarCurriculoCv.do?cod_rh=0001723117" target="_blank" rel="noopener">CvLAC · Minciencias <span>↗</span></a>
+      <span class="correo"><a id="mail-pie" href="mailto:freddyalejandrogf@gmail.com">freddyalejandrogf@gmail.com</a><button type="button" data-copy="freddyalejandrogf@gmail.com" data-target="mail-pie">Copiar</button></span>
+    </div>
+    <p class="control"><span>Documento controlado</span><span>Versión 1</span><span>Emitido el 29 de octubre de 2026</span></p>
+  </footer>
+
+</div>
+
+<script>
+document.querySelectorAll('[data-copy]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var texto = b.getAttribute('data-copy');
+    var listo = function (msg) { b.textContent = msg; setTimeout(function () { b.textContent = 'Copiar'; }, 2000); };
+    var seleccionar = function () {
+      var el = document.getElementById(b.getAttribute('data-target'));
+      if (!el) return;
+      var r = document.createRange(); r.selectNodeContents(el);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      listo('Seleccionado');
+    };
+    try {
+      navigator.clipboard.writeText(texto).then(function () { listo('Copiado'); }, seleccionar);
+    } catch (e) { seleccionar(); }
+  });
+});
+</script>
+</body>
+</html>
