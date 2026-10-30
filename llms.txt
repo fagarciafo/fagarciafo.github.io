@@ -1,21 +1,30 @@
 # Freddy Alejandro García Fonseca
 
-> Ingeniero electrónico y magíster en metrología (Colombia). Responsable de Control Metrológico de la Dirección Regional Oriente del Instituto Nacional de Medicina Legal y Ciencias Forenses (INMLCF). Trabaja en metrología legal y forense, alcoholimetría, NTC-ISO/IEC 17025, incertidumbre de medición, gestión de la calidad y digitalización de procesos con inteligencia artificial.
+> Ingeniero electrónico y magíster en metrología (Colombia). Responsable de Control Metrológico de la Dirección Regional Oriente del Instituto Nacional de Medicina Legal y Ciencias Forenses (INMLCF). Trabaja en metrología legal y forense, alcoholimetría, acreditación de laboratorios bajo NTC-ISO/IEC 17025, incertidumbre de medición, gestión de la calidad y transformación digital de laboratorios con inteligencia artificial.
 
 ## Trayectoria
 
 - Oct 2025 – actual: Responsable de Control Metrológico, Dirección Regional Oriente, INMLCF (Profesional Especializado Forense).
 - Feb – oct 2025: Profesional Especializado Forense, Grupo de Genética Forense, Dirección Regional Bogotá, INMLCF.
 - Jun 2023 – feb 2025: Responsable de Control Metrológico, Dirección Regional Bogotá, INMLCF.
-- Nov 2017 – jun 2023: Coordinador del Grupo Nacional de Metrología Forense, INMLCF (periodos nov 2017 – abr 2021 y feb 2022 – jun 2023).
-- Dic 2015: ingreso al INMLCF, Grupo de Metrología de la Dirección Regional Bogotá.
+- Nov 2017 – jun 2023: Coordinador del Grupo Nacional de Metrología Forense, INMLCF. Responsable de la acreditación ISO/IEC 17025 del laboratorio 14-LAC-045 en pequeños volúmenes, temperatura y concentración de cantidad.
+- Dic 2015 – nov 2017: Profesional Universitario Forense, Grupo de Metrología, INMLCF; responsable del laboratorio de alcohosensores.
 - 2011 – 2015: Ingeniero de Soporte Técnico en RQC Solutions y AW Electrónica (calibración y mantenimiento de alcohosensores y equipos de detección de gases).
+- 2010: Pasante de Ingeniería Electrónica, Cristalería Peldar S.A.
 
-## Docencia, normalización y ponencias
+## Aportes al Subsistema Nacional de la Calidad
 
-- Docente desde 2015 en cursos de medición indirecta de alcoholemia en aire expirado; docencia internacional en el Centro Nacional de Metrología de Guatemala (CENAME), 2021.
-- Miembro del Comité Técnico Sectorial de Normalización en Metrología (ICONTEC) y experto técnico del Grupo Técnico Asesor del ONAC.
-- Ponencia «Retos en la medición de alcohol en aire expirado», METROCOL 2022.
+- ONAC: experto técnico del Grupo Técnico Asesor para los criterios de acreditación de organismos autorizados de verificación metrológica de alcohosensores; profesional técnico externo.
+- SIC: ponente en el Día Mundial de la Metrología 2021 (SIC e INM) con «Retos para la medición de alcohol a través del aire espirado en Colombia»; aportes técnicos al proyecto de modificación del reglamento técnico metrológico de alcoholímetros (2023).
+- INM: apoyo técnico en equipos patrón, materiales de referencia y ensayo de aptitud para alcoholímetros (2017); proyecto de investigación conjunto INM–INMLCF.
+- ICONTEC: miembro del Comité Técnico Sectorial de Normalización en Metrología; seis conceptos técnicos sobre proyectos de norma.
+- Policía Nacional (DITRA): experto técnico en auditorías internas ISO/IEC 17025 del laboratorio 18-LAC-025 (2022 y 2023).
+- Metrolabor Ltda.: experto técnico en la auditoría interna del laboratorio 09-LAC-036 (2018).
+
+## Docencia
+
+- Docente desde 2015 en cursos de medición indirecta de alcoholemia en aire espirado para la Policía de Tránsito (Academia de Peritos Forenses, FUCS, Corporación Alejandría).
+- Capacitación internacional en el Centro Nacional de Metrología de Guatemala (CENAME), 2021.
 
 ## Formación
 
