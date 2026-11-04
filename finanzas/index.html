@@ -135,6 +135,8 @@ h2{font-size:16px;margin:0 0 10px;letter-spacing:-.01em}
 .ob{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--border)}
 .ob:first-child{border-top:0}
 .ob .date{text-align:center;background:var(--surface-2);border-radius:10px;padding:4px 0;line-height:1.1}
+.ob .acc{white-space:nowrap;display:inline-flex;align-items:center;gap:4px;margin-top:6px;padding:5px 11px;border-radius:999px;border:1px solid var(--accent);background:transparent;color:var(--accent);font:inherit;font-size:13px;font-weight:600;cursor:pointer;min-height:32px}
+.ob .acc.q{border-color:var(--border);color:var(--muted);font-weight:500}
 .ob .date b{display:block;font-size:17px}.ob .date span{font-size:11px;color:var(--muted);text-transform:uppercase}
 .sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:50;display:none}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:51;background:var(--surface);border-radius:18px 18px 0 0;max-height:88vh;overflow:auto;
@@ -352,8 +354,9 @@ function vInicio(movs){
   const pres = S.data.presupuesto||{};
   const cats = Object.entries(r.porCat).sort((a,b)=>b[1]-a[1]);
   const maxV = Math.max(1, ...cats.map(c=>Math.max(c[1], pres[c[0]]||0)));
-  const alertas = S.data.alertas||[];
-  const prox = (S.data.obligaciones||[]).filter(o=>o.ciclo===S.data.ciclo_actual && o.tipo!=='variable' && !['pagado'].includes(o.estado)).slice(0,7);
+  const pm = S.ajustes.pagos_marcados||{};
+  const alertas = (S.data.alertas||[]).filter(a=>!(a.clave && pm[a.clave]));
+  const prox = obVivas().filter(o=>o.ciclo===S.data.ciclo_actual && o.tipo!=='variable' && !['pagado'].includes(o.estado)).slice(0,7);
   const cal = S.data.calidad?.[S.mes];
   const deudaTotal = (S.data.deudas||[]).reduce((a,d)=>a+(d.saldo||0),0);
   return `${monthbar()}
@@ -495,7 +498,7 @@ function debtCard(d){
   if(hist.length>1){ const vs=hist.map(h=>h.saldo), mx=Math.max(...vs), mn=Math.min(...vs), W=300,H=46;
     const pts=vs.map((v,i)=>`${(i*(W-8)/(vs.length-1)+4).toFixed(1)},${(H-6-(H-12)*(mx===mn?0.5:(v-mn)/(mx-mn))).toFixed(1)}`).join(' ');
     spark=`<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="var(--accent-2)" stroke-width="2"/></svg><div class="sub">Saldo en los últimos ${hist.length} extractos</div>`; }
-  return `<div class="card debt"><div class="head"><div><div class="sub">${esc(d.entidad||'')}</div><b>${esc(d.nombre)}</b></div>${estadoTag(d.estado_pago)}</div>
+  return `<div class="card debt"><div class="head"><div><div class="sub">${esc(d.entidad||'')}</div><b>${esc(d.nombre)}</b></div>${estadoTag(obVivas().some(o=>o.tipo==='deuda'&&o.ref===d.id&&o.ciclo===S.data.ciclo_actual&&o.marcado)?'pagado':d.estado_pago)}</div>
     <div class="big num" style="margin-top:8px">${fmt(d.saldo)}</div><div class="sub">${d.tipo==='tc'||d.tipo==='rotativo'?'Saldo total':'Saldo de capital'}${d.corte?' · corte '+fechaCorta(d.corte):' · dato de configuración'}</div>
     ${uso!=null?`<div class="meter ${uso>85?'hot':''}"><div style="width:${Math.min(100,uso)}%"></div></div><div class="sub">Cupo usado ${uso}% · disponible ${fmt(d.cupo_disponible)}</div>`:''}
     <div class="facts">
@@ -516,6 +519,15 @@ function debtCard(d){
 }
 
 /* ─────────── Pagos (calendario) ─────────── */
+function claveOb(o){ return o.clave || `${o.ciclo}|${o.ref||o.concepto}`; }
+/* Aplica al instante lo que marcaste en la app, antes de que el flujo vuelva a calcular */
+function obVivas(){
+  const pm=S.ajustes.pagos_marcados||{};
+  return (S.data.obligaciones||[]).map(o=>{ const k=claveOb(o), p=pm[k];
+    if(p) return {...o, clave:k, estado:'pagado', marcado:true, fecha:p.fecha, monto:p.monto||o.monto, medio:p.medio||o.medio, fuente:o.marcado?o.fuente:'marcado por ti'};
+    if(o.marcado && S.desmarcadas?.has(k)) return {...o, clave:k, estado:'pendiente', marcado:false, fuente:'marca quitada · se recalcula en unos minutos'};
+    return {...o, clave:k}; });
+}
 function obRow(o){
   const [y,m,d]=o.fecha.split('-');
   if (o.tipo==='variable'){
@@ -526,11 +538,13 @@ function obRow(o){
       <div class="num" style="font-weight:600">${fmt(Math.max(0,(o.monto||0)-(o.gastado||0)))}<div class="sub" style="text-align:right">por gastar</div></div></div>`;
   }
   return `<div class="ob"><div class="date"><b>${+d}</b><span>${MES_C[+m-1]}</span></div><div style="min-width:0"><div class="t" style="font-weight:500;line-height:1.25">${esc(o.concepto)}</div>
-    <div class="sub">${estadoTag(o.estado)} ${esc(o.fuente||'')}${o.medio?' · '+esc(o.medio):''}</div></div><div class="num" style="font-weight:600">${o.monto?fmt(o.monto):'—'}</div></div>`;
+    <div class="sub">${estadoTag(o.estado)} ${esc(o.fuente||'')}${o.medio?' · '+esc(o.medio):''}</div>
+    ${o.estado!=='pagado'?`<button class="acc" data-marcar="${esc(o.clave)}">✓ Ya lo pagué</button>`:(o.marcado?`<button class="acc q" data-desmarcar="${esc(o.clave)}">Quitar marca</button>`:'')}</div>
+    <div class="num" style="font-weight:600">${o.monto?fmt(o.monto):'—'}</div></div>`;
 }
 const TIPO_OB = {deuda:'Deudas', fijo:'Gastos fijos', suscripcion:'Suscripciones', factura:'Facturas', impuesto:'Impuestos', variable:'Gastos variables (estimados)'};
 function vPagos(){
-  const ob=S.data.obligaciones||[];
+  const ob=obVivas();
   const ids=[...new Set(ob.map(o=>o.ciclo))].sort();
   if(!ids.includes(S.pagosCiclo)) S.pagosCiclo = S.data.ciclo_actual;
   const xs=ob.filter(o=>o.ciclo===S.pagosCiclo);
@@ -549,7 +563,7 @@ function vPagos(){
   ${porTipo(pendientes).map(([t,a])=>grupo(t+' · pendientes',a)).join('')}
   ${grupo('Gastos variables (estimados)',vars)}
   ${grupo('Pagados',pagados)}
-  <div class="note">Los fijos, suscripciones y variables se editan en <code>config/perfil.yaml</code>. Lo que pagas por cuenta de tu mamá no aparece aquí.</div>`;
+  <div class="note">Si pagaste algo que el banco no avisa (por ejemplo, por Bre-B), toca <b>Ya lo pagué</b>. Cuando llegue el extracto, el pago real reemplaza tu marca sin contarlo dos veces. Lo que pagas por cuenta de tu mamá no aparece aquí.</div>`;
 }
 
 /* ─────────── Más ─────────── */
@@ -559,7 +573,7 @@ function vMas(movs){
   if (S.sub==='facturas') return vFacturas();
   if (S.sub==='calidad') return vCalidad();
   if (S.sub==='conexion') return vConexion();
-  const opts=[['efectivo',ICON.cash,'Efectivo','Registra gastos en efectivo e ingresos a mano'],['extractos',ICON.doc,'Extractos','Sube el extracto de ahorros y revisa los recibidos'],
+  const opts=[['efectivo',ICON.cash,'Efectivo','Registra gastos en efectivo e ingresos a mano'],['extractos',ICON.doc,'Extractos y documentos','Sube extractos (PDF) o facturas (ZIP/XML)'],
     ['facturas',ICON.doc,'Facturas','Facturas electrónicas y su pago'],['calidad',ICON.list,'Calidad de datos','Qué tanto cubren los avisos del banco'],['conexion',ICON.bank,'Conexión','Repositorio, token y actualización']];
   return `<h1>Más</h1><div class="more-grid" style="margin-top:12px">${opts.map(([k,i,t,s])=>`<button data-sub="${k}"><div class="ico">${i}</div><b>${t}</b><span>${s}</span></button>`).join('')}</div>`;
 }
@@ -578,11 +592,12 @@ function vEfectivo(movs){
 function vExtractos(){
   const xs=S.data.extractos||[];
   const tipos={ahorros:'Cuenta de ahorros',tc:'Tarjeta de crédito',hipotecario:'Hipotecario',cupoya:'CupoYa',libranza:'Libranza',nomina:'Nómina'};
-  return `${volver}<h1>Extractos</h1><div class="sub">Los de tarjeta, hipotecario, CupoYa y Comultrasan llegan solos por correo. El de la cuenta de ahorros Davibank hay que subirlo.</div>
-  <div class="card" style="margin-top:12px"><h2>Subir un extracto (PDF)</h2>
-    <label class="f">Tipo</label><select class="inp" id="upTipo"><option value="ahorros">Cuenta de ahorros Davibank</option><option value="">Detectar automáticamente</option><option value="tc">Tarjeta de crédito</option><option value="hipotecario">Crédito hipotecario</option><option value="cupoya">CupoYa Compensar</option><option value="comultrasan">Comultrasan</option><option value="nomina">Desprendible de nómina</option></select>
-    <label class="drop" style="display:block;margin-top:10px">Toca para elegir el PDF<input type="file" id="upFile" accept="application/pdf" class="hide"></label>
-    <div class="sub" id="upInfo" style="margin-top:6px">Si el PDF tiene clave, el flujo prueba con la que guardaste como secreto (PDF_PASSWORD).</div></div>
+  return `${volver}<h1>Extractos y documentos</h1><div class="sub">Los extractos de la tarjeta, el hipotecario, CupoYa y Comultrasan llegan solos por correo y se leen en la siguiente actualización. Hay que subir a mano el extracto de la cuenta de ahorros Davibank y el desprendible de nómina, que no llegan por correo.</div>
+  <div class="card" style="margin-top:12px"><h2>Subir un documento</h2>
+    <div class="kv" style="margin-bottom:6px"><span>PDF</span><b style="font-weight:500">Extractos de Davibank (ahorros, tarjeta, hipotecario), CupoYa, Comultrasan y desprendible de nómina. Con o sin clave.</b><span>ZIP o XML</span><b style="font-weight:500">Factura electrónica DIAN que no te llegó al correo.</b></div>
+    <label class="f">Tipo</label><select class="inp" id="upTipo"><option value="ahorros">Cuenta de ahorros Davibank</option><option value="">Detectar automáticamente</option><option value="tc">Tarjeta de crédito</option><option value="hipotecario">Crédito hipotecario</option><option value="cupoya">CupoYa Compensar</option><option value="comultrasan">Comultrasan</option><option value="nomina">Desprendible de nómina</option><option value="factura">Factura electrónica (ZIP o XML)</option></select>
+    <label class="drop" style="display:block;margin-top:10px">Toca para elegir el archivo<input type="file" id="upFile" accept="application/pdf,.pdf,.zip,application/zip,.xml,text/xml,application/xml" class="hide"></label>
+    <div class="sub" id="upInfo" style="margin-top:6px">Si el PDF tiene clave, se abre con tu cédula. No se leen fotos ni capturas de pantalla: para un gasto en efectivo usa el botón Efectivo.</div></div>
   <div class="card"><h2>Recibidos</h2><table class="t"><tr><th>Producto</th><th>Corte</th><th class="r">Movs.</th></tr>
   ${xs.map(x=>`<tr><td>${esc(tipos[x.tipo]||x.tipo)}<div class="sub">${esc(x.entidad||'')}</div></td><td>${fechaCorta(x.corte)} ${(x.corte||'').slice(0,4)}</td><td class="r">${x.n_movimientos||'—'}</td></tr>`).join('')}</table></div>`;
 }
@@ -611,6 +626,8 @@ function vConexion(){
 /* ═══════════════════ Interacción ═══════════════════ */
 function wire(movs){
   document.querySelectorAll('[data-mes]').forEach(b=>b.onclick=()=>{ if(b.dataset.mes){ S.mes=b.dataset.mes; render(); } });
+  document.querySelectorAll('[data-marcar]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); abrirMarcar(obVivas().find(o=>o.clave===b.dataset.marcar)); });
+  document.querySelectorAll('[data-desmarcar]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); quitarMarca(obVivas().find(o=>o.clave===b.dataset.desmarcar)); });
   document.querySelectorAll('[data-pciclo]').forEach(b=>b.onclick=()=>{ S.pagosCiclo=b.dataset.pciclo; render(); });
   document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ S.filtro=b.dataset.f; render(); });
   document.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{ S.cat=b.dataset.cat==='Efectivo sin detallar'?null:b.dataset.cat; S.filtro='todos'; S.tab='movs'; render(); scrollTo(0,0); });
@@ -638,7 +655,7 @@ function opcionesCat(sel){ const cs=[...(S.data.categorias||[])]; if(sel && !cs.
 function abrirMov(m){
   if(!m) return;
   const f = m.factura ? (S.data.facturas||[]).find(x=>x.id===m.factura) : null;
-  const fu = (m.fuentes||[]).map(s=>({davibank_tarjeta:'Aviso de compra Davibank',davibank_online:'Aviso de banca online',davibank_debito_auto:'Aviso de pago automático',pse:'Comprobante PSE',compensar_avance:'Aviso de Compensar',extracto_ahorros:'Extracto de ahorros',extracto_tc:'Extracto de tarjeta',factura:'Factura electrónica',manual:'Registro manual',desprendible:'Desprendible de nómina'}[s]||s));
+  const fu = (m.fuentes||[]).map(s=>({davibank_tarjeta:'Aviso de compra Davibank',davibank_online:'Aviso de banca online',davibank_debito_auto:'Aviso de pago automático',pse:'Comprobante PSE',compensar_avance:'Aviso de Compensar',extracto_ahorros:'Extracto de ahorros',extracto_tc:'Extracto de tarjeta',factura:'Factura electrónica',manual:'Registro manual',marcado:'Marcado como pagado por ti (provisional)',desprendible:'Desprendible de nómina'}[s]||s));
   const clases=[['tercero','Por cuenta de otra persona (no contar)'],['consumo','Gasto'],['ingreso','Ingreso'],['deuda','Pago a deuda'],['credito','Plata prestada (avance)'],['ahorro','Ahorro/inversión'],['retiro','Retiro de efectivo'],['interno','Entre mis cuentas (no contar)']];
   abrirSheet(`<div class="sub">${fechaLarga(m.fecha)}${m.hora?' · '+esc(m.hora):''}</div><h2 style="font-size:19px;margin:4px 0">${esc(m.contraparte)}</h2>
    <div class="num ${m.dir==='in'?'pos':''}" style="font-size:26px;font-weight:700">${m.dir==='in'?'+':'−'}${fmt(m.monto)}</div>
@@ -664,6 +681,37 @@ function abrirMov(m){
   };
   if($('#mBorrar')) $('#mBorrar').onclick=async()=>{ if(!confirm('¿Borrar este registro?')) return;
     try{ await guardarManual(xs=>{ const e=xs.find(x=>x.id===m.id); if(e) e.borrado=true; return xs; }, 'Borrar registro manual'); cerrarSheet(); render(); toast('Borrado'); }catch(e){ toast(e.message,5000); } };
+}
+function abrirMarcar(o){
+  if(!o) return;
+  const hoy=hoyISO(), f0=(o.fecha&&o.fecha<=hoy)?o.fecha:hoy;
+  const medios=['Bre-B / Nequi / Daviplata','PSE','Transferencia','Débito','Tarjeta de crédito','Efectivo','Otro'];
+  const m0=o.medio==='Bre-B'?medios[0]:(medios.includes(o.medio)?o.medio:({deuda:'PSE',suscripcion:'Tarjeta de crédito',impuesto:'PSE'}[o.tipo]||medios[0]));
+  abrirSheet(`<div class="sub">Ciclo ${esc(ciclo(o.ciclo).etiqueta)}</div><h2 style="font-size:19px;margin:4px 0">¿Ya pagaste ${esc(o.concepto)}?</h2>
+   <label class="f">Valor pagado</label><input class="inp big num" id="kVal" inputmode="numeric" value="${o.monto?'$ '+Math.round(o.monto).toLocaleString('es-CO'):''}" placeholder="$ 0" autocomplete="off">
+   <div class="row2"><div><label class="f">Fecha del pago</label><input class="inp" type="date" id="kFecha" value="${f0}"></div>
+   <div><label class="f">Pagado con</label><select class="inp" id="kMedio">${medios.map(x=>`<option ${x===m0?'selected':''}>${x}</option>`).join('')}</select></div></div>
+   <label class="f" style="display:flex;gap:10px;align-items:flex-start;color:var(--text)"><input type="checkbox" id="kGasto" checked style="margin-top:3px"><span>Contarlo en los gastos del ciclo
+   <span class="sub" style="display:block">Mientras llega el movimiento del banco. Cuando aparezca en un aviso o extracto, se cambia por el real y no se cuenta dos veces.</span></span></label>
+   <label class="f">Nota</label><input class="inp" id="kNota" placeholder="Opcional">
+   <button class="btn" id="kGuardar">Marcar como pagado</button>`);
+  const val=$('#kVal'); val.oninput=()=>{ const n=val.value.replace(/\D/g,''); val.value=n?'$ '+(+n).toLocaleString('es-CO'):''; };
+  $('#kGuardar').onclick=async()=>{
+    const monto=+val.value.replace(/\D/g,''); if(!monto){ toast('Escribe el valor'); return; }
+    const medioSel=$('#kMedio').value, nota=$('#kNota').value.trim();
+    const p={ciclo:o.ciclo, ref:o.ref||null, tipo:o.tipo, concepto:o.concepto, fecha:$('#kFecha').value||hoy, monto,
+      medio:medioSel.startsWith('Bre-B')?'Bre-B':medioSel, gasto:$('#kGasto').checked, ...(nota?{nota}:{}), marcado_el:new Date().toISOString()};
+    $('#kGuardar').disabled=true;
+    try{ await guardarAjuste(aj=>{ aj.pagos_marcados ||= {}; aj.pagos_marcados[o.clave]=p; return aj; }, `Pago marcado: ${o.concepto} ${monto}`);
+      S.desmarcadas?.delete(o.clave); cerrarSheet(); render(); toast('Marcado como pagado'); }
+    catch(e){ $('#kGuardar').disabled=false; toast(e.message,5000); }
+  };
+}
+async function quitarMarca(o){
+  if(!o || !confirm(`¿Quitar la marca de pagado de “${o.concepto}”?`)) return;
+  try{ await guardarAjuste(aj=>{ if(aj.pagos_marcados) delete aj.pagos_marcados[o.clave]; return aj; }, `Quitar marca de pago: ${o.concepto}`);
+    (S.desmarcadas ||= new Set()).add(o.clave); render(); toast('Marca quitada'); }
+  catch(e){ toast(e.message,5000); }
 }
 function abrirFactura(f){
   if(!f) return;
@@ -716,12 +764,16 @@ async function guardarAjuste(fn, msg){
 async function subirPDF(file, tipo){
   if(!file) return;
   if(file.size>15e6){ toast('El archivo pesa más de 15 MB'); return; }
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  if(!['pdf','zip','xml'].includes(ext)){ toast('Solo PDF, ZIP o XML'); return; }
+  if(ext==='pdf' && tipo==='factura'){ toast('La factura electrónica se sube en ZIP o XML: el PDF solo no trae los datos',5000); return; }
+  if(ext!=='pdf') tipo='';
   const info=$('#upInfo'); info.textContent='Subiendo…';
   if (S.demo){ info.textContent='Vista previa: el archivo no se sube.'; return; }
   const buf=new Uint8Array(await file.arrayBuffer()); let bin=''; for(let i=0;i<buf.length;i+=0x8000) bin+=String.fromCharCode.apply(null,buf.subarray(i,i+0x8000));
   const nombre=(tipo?tipo+'__':'')+Date.now()+'_'+file.name.replace(/[^\w.\-]+/g,'_');
-  try{ await GH.put('inbox/'+nombre, btoa(bin), null, `Extracto subido desde la app: ${file.name}`);
-    info.innerHTML='Listo. El flujo lo procesa en 1–3 minutos; luego toca <b>Actualizar</b> arriba.'; toast('Extracto subido'); }
+  try{ await GH.put('inbox/'+nombre, btoa(bin), null, `Documento subido desde la app: ${file.name}`);
+    info.innerHTML='Listo. Se procesa en 1–3 minutos; luego toca <b>Actualizar</b> arriba.'; toast('Archivo subido'); }
   catch(e){ info.textContent=e.message; }
 }
 async function actualizarAhora(){
