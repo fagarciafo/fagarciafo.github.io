@@ -105,6 +105,8 @@ h2{font-size:16px;margin:0 0 10px;letter-spacing:-.01em}
 .bars .track{grid-column:1/3;height:6px;background:var(--surface-2);border-radius:4px;position:relative;overflow:hidden}
 .bars .fill{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:var(--accent-2)}
 .bars .fill.over{background:var(--neg)}
+.bars .fill.prev{background:var(--accent-2);opacity:.28;border-radius:0 4px 4px 0}
+.bars .row.cero .n,.bars .row.cero .v{color:var(--muted)}
 .bars .budget{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--text);opacity:.55}
 .bars .meta{grid-column:1/3;font-size:12px;color:var(--muted)}
 .list .it{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--border);cursor:pointer}
@@ -243,7 +245,7 @@ const GH = {
   h(extra={}){ return {'Authorization':'Bearer '+S.cfg.token,'X-GitHub-Api-Version':'2022-11-28',...extra}; },
   async raw(path){ const r=await fetch(`${this.base()}/contents/${path}?ref=${S.cfg.branch||'main'}&t=${Date.now()}`,{headers:this.h({'Accept':'application/vnd.github.raw+json'})});
     if(r.status===404) return null; if(!r.ok) throw new Error(`GitHub ${r.status} al leer ${path}`); return r.text(); },
-  async json(path){ const r=await fetch(`${this.base()}/contents/${path}?ref=${S.cfg.branch||'main'}&t=${Date.now()}`,{headers:this.h({'Accept':'application/vnd.github+json'})});
+  async json(path){ const r=await fetch(`${this.base()}/contents/${path}?ref=${S.cfg.branch||'main'}&t=${Date.now()}`,{cache:'no-store',headers:this.h({'Accept':'application/vnd.github+json'})});
     if(r.status===404) return {data:null,sha:null}; if(!r.ok) throw new Error(`GitHub ${r.status} al leer ${path}`);
     const j=await r.json(); return {data: JSON.parse(unb64(j.content)), sha:j.sha}; },
   async put(path, contentB64, sha, message){ const body={message, content:contentB64, branch:S.cfg.branch||'main'}; if(sha) body.sha=sha;
@@ -267,7 +269,8 @@ async function cargar(){
 function movimientos(){
   const base = S.data.movimientos;
   const ids = new Set(base.map(m=>m.id));
-  const extra = S.manual.filter(e=>!e.borrado && !ids.has(e.id)).map(e=>({
+  const conc = new Set(S.data.manuales_conciliados||[]);
+  const extra = S.manual.filter(e=>!e.borrado && !ids.has(e.id) && !conc.has(e.id)).map(e=>({
     id:e.id, fecha:e.fecha, monto:+e.monto, dir:e.tipo==='ingreso'?'in':'out', medio:e.medio||'Efectivo',
     contraparte:e.descripcion||(e.tipo==='ingreso'?'Ingreso':'Gasto en efectivo'), descripcion:e.descripcion||'',
     clase:e.tipo==='ingreso'?'ingreso':'consumo', categoria:e.categoria||'Otros', fuentes:['manual'], manual:true, pendiente:true }));
@@ -352,8 +355,13 @@ function monthbar(){
 function vInicio(movs){
   const r = resumenMes(movs, S.mes);
   const pres = S.data.presupuesto||{};
-  const cats = Object.entries(r.porCat).sort((a,b)=>b[1]-a[1]);
-  const maxV = Math.max(1, ...cats.map(c=>Math.max(c[1], pres[c[0]]||0)));
+  const porPagar = {};
+  if (S.mes===S.data.ciclo_actual) for (const o of obVivas()){
+    if (o.ciclo!==S.mes || !o.categoria || o.tipo==='variable' || o.estado==='pagado' || !o.monto) continue;
+    const x = porPagar[o.categoria] ||= {v:0, items:[]}; x.v += o.monto; x.items.push(`${o.concepto} ${fechaCorta(o.fecha)}`); }
+  const nombres = new Set([...Object.keys(r.porCat), ...Object.keys(pres), ...Object.keys(porPagar)]);
+  const cats = [...nombres].map(c=>[c, r.porCat[c]||0]).sort((a,b)=>(b[1]-a[1]) || ((pres[b[0]]||0)-(pres[a[0]]||0)));
+  const maxV = Math.max(1, ...cats.map(([c,v])=>Math.max(v+(porPagar[c]?.v||0), pres[c]||0)));
   const pm = S.ajustes.pagos_marcados||{};
   const alertas = (S.data.alertas||[]).filter(a=>!(a.clave && pm[a.clave]));
   const prox = obVivas().filter(o=>o.ciclo===S.data.ciclo_actual && o.tipo!=='variable' && !['pagado'].includes(o.estado)).slice(0,7);
@@ -370,13 +378,14 @@ function vInicio(movs){
     <div>
       <div class="card"><h2>En qué se te va la plata <span class="sub">· ${fmt(r.gastoTotal)}</span></h2>
         ${cats.length? `<div class="bars">${cats.map(([c,v])=>{ const p=pres[c]; const over=p&&v>p;
-          return `<div class="row" data-cat="${esc(c)}"><div class="n">${esc(c)}</div><div class="v num">${fmt(v)}</div>
-          <div class="track"><div class="fill ${over?'over':''}" style="width:${(100*v/maxV).toFixed(1)}%"></div>${p?`<div class="budget" style="left:${(100*p/maxV).toFixed(1)}%"></div>`:''}</div>
-          ${p?`<div class="meta">Presupuesto ${fmt(p)} · ${over?'<span class="neg">te pasaste '+fmt(v-p)+'</span>':'quedan '+fmt(p-v)}</div>`:''}</div>`; }).join('')}</div>`
+          const pp=porPagar[c];
+          return `<div class="row ${v?'':'cero'}" data-cat="${esc(c)}"><div class="n">${esc(c)}</div><div class="v num">${fmt(v)}</div>
+          <div class="track"><div class="fill ${over?'over':''}" style="width:${(100*v/maxV).toFixed(1)}%"></div>${pp?`<div class="fill prev" style="left:${(100*v/maxV).toFixed(1)}%;width:${(100*pp.v/maxV).toFixed(1)}%"></div>`:''}${p?`<div class="budget" style="left:${(100*p/maxV).toFixed(1)}%"></div>`:''}</div>
+          <div class="meta">${p?`Presupuesto ${fmt(p)} · ${over?'<span class="neg">te pasaste '+fmt(v-p)+'</span>':'quedan '+fmt(p-v)}`:(v?'':'Sin gastos en este ciclo')}${pp?`${p||!v?'<br>':''}Por pagar ${fmt(pp.v)}: ${esc(pp.items.join(', '))}`:''}</div></div>`; }).join('')}</div>`
           : '<div class="empty">Sin gastos registrados en este ciclo.</div>'}
         ${r.extra?`<div class="note">Incluye ${fmt(r.extra)} en compras grandes (más de $1 millón). Sin ellas, el gasto del ciclo fue ${fmt(r.gastoTotal-r.extra)}.</div>`:''}
         ${(r.terPag||r.terReem)?`<div class="note">No se cuenta como gasto ni ingreso: pagaste ${fmt(r.terPag)} por cuenta de otra persona y te reembolsaron ${fmt(r.terReem)}. <a href="#" data-filtro="tercero">Ver</a></div>`:''}
-        ${r.sinDetallar?`<div class="note">Retiraste ${fmt(r.retiros)} en efectivo y registraste ${fmt(r.efectivo)}. <a href="#" data-go="efectivo">Registra en qué se fue el resto</a>.</div>`:''}
+        ${r.sinDetallar?`<div class="note">Retiraste ${fmt(r.retiros)} en efectivo y registraste ${fmt(r.efectivo)}. <a href="#" data-go="efectivo">Toca el retiro y di en qué se fue</a>.</div>`:''}
       </div>
       <div class="card chart"><h2>Últimos ciclos</h2>${grafMeses(movs)}</div>
     </div>
@@ -656,6 +665,8 @@ function abrirMov(m){
   if(!m) return;
   const f = m.factura ? (S.data.facturas||[]).find(x=>x.id===m.factura) : null;
   const fu = (m.fuentes||[]).map(s=>({davibank_tarjeta:'Aviso de compra Davibank',davibank_online:'Aviso de banca online',davibank_debito_auto:'Aviso de pago automático',pse:'Comprobante PSE',compensar_avance:'Aviso de Compensar',extracto_ahorros:'Extracto de ahorros',extracto_tc:'Extracto de tarjeta',factura:'Factura electrónica',manual:'Registro manual',marcado:'Marcado como pagado por ti (provisional)',desprendible:'Desprendible de nómina'}[s]||s));
+  const prov = String(m.id).startsWith('marcado:');
+  const editable = m.manual && !prov;
   const clases=[['tercero','Por cuenta de otra persona (no contar)'],['consumo','Gasto'],['ingreso','Ingreso'],['deuda','Pago a deuda'],['credito','Plata prestada (avance)'],['ahorro','Ahorro/inversión'],['retiro','Retiro de efectivo'],['interno','Entre mis cuentas (no contar)']];
   abrirSheet(`<div class="sub">${fechaLarga(m.fecha)}${m.hora?' · '+esc(m.hora):''}</div><h2 style="font-size:19px;margin:4px 0">${esc(m.contraparte)}</h2>
    <div class="num ${m.dir==='in'?'pos':''}" style="font-size:26px;font-weight:700">${m.dir==='in'?'+':'−'}${fmt(m.monto)}</div>
@@ -663,24 +674,48 @@ function abrirMov(m){
    ${m.descripcion&&m.descripcion!==m.contraparte?`<span>Descripción</span><b>${esc(m.descripcion)}</b>`:''}${m.detalle&&m.detalle!==m.contraparte?`<span>Detalle</span><b>${esc(m.detalle)}</b>`:''}
    <span>Fuentes</span><b>${fu.map(esc).join(' + ')}</b>${m.sin_notificacion?'<span></span><b class="warn">El banco no envió aviso de este movimiento</b>':''}</div>
    ${f?`<div class="note"><b>Factura ${esc(f.numero)}</b> · ${esc(f.emisor)} · NIT ${esc(f.nit||'')}<div class="items">${(f.items||[]).slice(0,40).map(i=>`<div><span>${esc(i.d)}${i.q&&i.q!==1?' ×'+i.q:''}</span><span class="num">${fmt(i.v)}</span></div>`).join('')}</div></div>`:''}
-   <label class="f">Categoría</label><select class="inp" id="mCat">${opcionesCat(m.categoria)}</select>
-   <label class="f">Tipo de movimiento</label><select class="inp" id="mClase">${clases.map(([k,l])=>`<option value="${k}" ${m.clase===k?'selected':''}>${l}</option>`).join('')}</select>
-   <label class="f" style="display:flex;gap:8px;align-items:center;color:var(--text)"><input type="checkbox" id="mRegla"> Aplicar siempre a “${esc((m.contraparte||'').slice(0,30))}”</label>
+   ${prov?`<div class="note">Es un pago que marcaste como hecho en <b>Pagos</b>. Se reemplaza solo cuando llegue el movimiento del banco; si te equivocaste, quítalo allá con <b>Quitar marca</b>.</div>`:''}
+   ${m.clase==='retiro'?`<div class="note" style="margin-top:12px"><b>¿En qué gastaste este efectivo?</b>
+     <div class="sub" style="margin:2px 0 6px">Si todo se fue en una sola cosa, elige la categoría: el retiro queda como ese gasto y no tienes que registrar nada más. Si se repartió, regístralo por partes.</div>
+     <select class="inp" id="rCat">${opcionesCat('Comidas fuera y snacks')}</select>
+     <button class="btn" id="rTodo">Todo fue en esta categoría</button><button class="btn sec" id="rPartes">Repartirlo en varios gastos en efectivo</button></div>`:''}
+   ${editable?`<label class="f">Valor</label><input class="inp big num" id="mVal" inputmode="numeric" value="$ ${Math.round(m.monto).toLocaleString('es-CO')}">
+   <div class="row2"><div><label class="f">Fecha</label><input class="inp" type="date" id="mFecha" value="${esc(m.fecha)}"></div>
+   <div><label class="f">Descripción</label><input class="inp" id="mDesc" value="${esc(m.descripcion||'')}" placeholder="Opcional"></div></div>`:''}
+   ${prov?'':`<label class="f">Categoría</label><select class="inp" id="mCat">${opcionesCat(m.categoria)}</select>
+   ${editable?'':`<label class="f">Tipo de movimiento</label><select class="inp" id="mClase">${clases.map(([k,l])=>`<option value="${k}" ${m.clase===k?'selected':''}>${l}</option>`).join('')}</select>
+   <label class="f" style="display:flex;gap:8px;align-items:center;color:var(--text)"><input type="checkbox" id="mRegla"> Aplicar siempre a “${esc((m.contraparte||'').slice(0,30))}”</label>`}
    <label class="f">Nota</label><input class="inp" id="mNota" value="${esc(m.nota||'')}" placeholder="Opcional">
    <button class="btn" id="mGuardar">Guardar</button>
-   ${m.manual?'<button class="btn danger" id="mBorrar">Borrar este registro</button>':''}`);
+   ${editable?'<button class="btn danger" id="mBorrar">Borrar este registro</button>':''}`}`);
+  if (prov) return;
+  if ($('#mVal')) $('#mVal').oninput=e=>{ const n=e.target.value.replace(/\D/g,''); e.target.value=n?'$ '+(+n).toLocaleString('es-CO'):''; };
+  if ($('#rTodo')) $('#rTodo').onclick=async()=>{ const cat=$('#rCat').value; $('#rTodo').disabled=true;
+    try{ await guardarAjuste(aj=>{ aj.movimientos[m.id]={categoria:cat, clase:'consumo', nota:'Retiro en efectivo gastado en '+cat}; return aj; }, `Detallar retiro: ${cat} ${m.monto}`);
+      cerrarSheet(); render(); toast('Listo: el retiro quedó como '+cat); }
+    catch(e){ $('#rTodo').disabled=false; toast(e.message,6000); } };
+  if ($('#rPartes')) $('#rPartes').onclick=()=>{ cerrarSheet(); setTimeout(()=>abrirEfectivo('gasto'),220); };
+  /* Si GitHub devuelve una versión atrasada sin este registro, se usa la copia de la app */
+  const conRegistro = xs => { let e=xs.find(x=>x.id===m.id); if(!e){ const loc=S.manual.find(x=>x.id===m.id); if(loc){ e={...loc}; xs.push(e); } } return e; };
   $('#mGuardar').onclick=async()=>{
-    const cat=$('#mCat').value, clase=$('#mClase').value, nota=$('#mNota').value.trim(), regla=$('#mRegla').checked;
+    const cat=$('#mCat').value, nota=$('#mNota').value.trim();
+    const clase=$('#mClase')?$('#mClase').value:m.clase, regla=$('#mRegla')?$('#mRegla').checked:false;
+    $('#mGuardar').disabled=true;
     try{
-      if (m.manual){ await guardarManual(xs=>{ const e=xs.find(x=>x.id===m.id); if(e){ e.categoria=cat; e.nota=nota; if(clase==='ingreso') e.tipo='ingreso'; } return xs; }, 'Editar registro manual'); }
+      if (editable){ const monto=+$('#mVal').value.replace(/\D/g,''); if(!monto){ $('#mGuardar').disabled=false; toast('Escribe el valor'); return; }
+        const fecha=$('#mFecha').value||m.fecha, desc=$('#mDesc').value.trim();
+        await guardarManual(xs=>{ const e=conRegistro(xs); if(e){ e.categoria=cat; e.nota=nota; e.monto=monto; e.fecha=fecha; e.descripcion=desc; e.editado=new Date().toISOString(); } return xs; }, `Editar registro: ${desc||cat} ${monto}`);
+        S.mes=cicloDe(fecha); }
       else await guardarAjuste(aj=>{ aj.movimientos[m.id]={categoria:cat, clase, ...(nota?{nota}:{}), ...(clase==='interno'?{ignorar:true}:{})};
         if(regla){ const pat=norm(m.contraparte).replace(/\s*\d{4,}$/,'').trim().replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
           if(pat.length>=3){ aj.reglas = aj.reglas.filter(r=>r.patron!==pat); aj.reglas.unshift({patron:pat, categoria:cat, clase}); } } return aj; }, `Clasificar ${m.contraparte}`);
       cerrarSheet(); render(); toast('Guardado'+(regla?' y aplicado a los demás':''));
-    }catch(e){ toast(e.message,5000); }
+    }catch(e){ $('#mGuardar').disabled=false; toast(e.message,6000); }
   };
   if($('#mBorrar')) $('#mBorrar').onclick=async()=>{ if(!confirm('¿Borrar este registro?')) return;
-    try{ await guardarManual(xs=>{ const e=xs.find(x=>x.id===m.id); if(e) e.borrado=true; return xs; }, 'Borrar registro manual'); cerrarSheet(); render(); toast('Borrado'); }catch(e){ toast(e.message,5000); } };
+    $('#mBorrar').disabled=true;
+    try{ await guardarManual(xs=>{ const e=conRegistro(xs); if(e) e.borrado=true; return xs; }, `Borrar registro: ${m.descripcion||m.categoria} ${m.monto}`); cerrarSheet(); render(); toast('Borrado'); }
+    catch(e){ $('#mBorrar').disabled=false; toast(e.message,6000); } };
 }
 function abrirMarcar(o){
   if(!o) return;
@@ -728,8 +763,9 @@ function abrirEfectivo(tipo='gasto'){
   <label class="f">Valor</label><input class="inp big num" id="eVal" inputmode="numeric" placeholder="$ 0" autocomplete="off">
   <div class="row2"><div><label class="f">Fecha</label><input class="inp" type="date" id="eFecha" value="${hoyISO()}"></div>
   <div><label class="f">${ing?'Medio':'Pagado con'}</label><select class="inp" id="eMedio">${(ing?['Transferencia','Efectivo','Consignación','Otro']:['Efectivo','Bre-B / Nequi / Daviplata','Otro']).map(x=>`<option>${x}</option>`).join('')}</select></div></div>
-  <label class="f">Categoría</label><select class="inp" id="eCat">${ing?['Honorarios y docencia','Transferencias recibidas','Reintegros y devoluciones','Otros ingresos'].map(c=>`<option>${c}</option>`).join(''):opcionesCat('Comidas fuera y snacks')}</select>
+  <label class="f">Categoría</label><select class="inp" id="eCat">${ing?['Nómina INMLCF','Honorarios y docencia','Transferencias recibidas','Reintegros y devoluciones','Otros ingresos'].map(c=>`<option>${c}</option>`).join(''):opcionesCat('Comidas fuera y snacks')}</select>
   <label class="f">Descripción</label><input class="inp" id="eDesc" placeholder="${ing?'Ej: clase en la FUCS':'Ej: almuerzo, taxi, tienda'}">
+  <div class="sub" style="margin-top:8px">${ing?'Si el banco también lo reporta (nómina, transferencia), cuando llegue el extracto se une con ese movimiento y no se cuenta dos veces.':'Si es plata que sacaste del cajero y se fue toda en una sola cosa, es más fácil tocar el retiro en Movimientos y elegir la categoría.'}</div>
   <button class="btn" id="eGuardar">Guardar</button>`);
   const val=$('#eVal'); val.focus();
   val.oninput=()=>{ const n=val.value.replace(/\D/g,''); val.value=n?'$ '+(+n).toLocaleString('es-CO'):''; };
@@ -742,24 +778,50 @@ function abrirEfectivo(tipo='gasto'){
     $('#eGuardar').disabled=true;
     try{ await guardarManual(xs=>[...xs,e], `${ing?'Ingreso':'Gasto en efectivo'}: ${e.descripcion||e.categoria} ${monto}`);
       cerrarSheet(); S.mes=cicloDe(e.fecha); render(); toast('Guardado en tu repositorio'); }
-    catch(err){ $('#eGuardar').disabled=false; toast(err.message,5000); }
+    catch(err){ $('#eGuardar').disabled=false; toast(err.message,6000); }
   };
 }
 
+/* Guarda un JSON del repositorio. Justo después de guardar, GitHub a veces entrega la versión
+   anterior del archivo; con esa versión el siguiente guardado fallaba (error 409). Aquí se detecta,
+   se usa la copia recién guardada y, si hay un choque, se reintenta. */
+const ULTIMO = {};
+function mensajeGH(e){
+  const t = e?.message||String(e);
+  if (/GitHub 409|GitHub 422/.test(t)) return 'Otro cambio se estaba guardando al mismo tiempo. Espera unos segundos y vuelve a intentarlo.';
+  if (/GitHub 401|GitHub 403/.test(t)) return 'GitHub rechazó el token (venció o no tiene permiso de escritura). Revísalo en Más → Conexión.';
+  if (/Failed to fetch|NetworkError/.test(t)) return 'Sin conexión con GitHub. Revisa tu internet e intenta de nuevo.';
+  return t;
+}
+async function guardarJSON(path, vacio, fn, msg){
+  let error;
+  for (let i=0; i<4; i++){
+    let cur = await GH.json(path);
+    const u = ULTIMO[path];
+    if (u && cur.sha === u.prev) cur = {data: JSON.parse(JSON.stringify(u.data)), sha: u.sha};
+    const nuevo = fn(cur.data ?? JSON.parse(JSON.stringify(vacio)));
+    try{
+      const sha = await GH.put(path, b64(JSON.stringify(nuevo,null,1)), cur.sha, msg);
+      ULTIMO[path] = {prev: cur.sha, sha, data: nuevo};
+      return {data: nuevo, sha};
+    }catch(e){
+      error = e;
+      if (!/GitHub (409|422)/.test(e.message)) break;
+      await new Promise(r=>setTimeout(r, 1500*(i+1)));
+    }
+  }
+  throw new Error(mensajeGH(error));
+}
 async function guardarManual(fn, msg){
   if (S.demo){ S.manual = fn(JSON.parse(JSON.stringify(S.manual))); toast('Vista previa: no se guardó en GitHub'); return; }
-  const cur = await GH.json('data/manual/movimientos.json');
-  const nuevo = fn(cur.data||[]);
-  S.manualSha = await GH.put('data/manual/movimientos.json', b64(JSON.stringify(nuevo,null,1)), cur.sha, msg);
-  S.manual = nuevo;
+  const r = await guardarJSON('data/manual/movimientos.json', [], fn, msg);
+  S.manual = r.data; S.manualSha = r.sha;
 }
 async function guardarAjuste(fn, msg){
-  if (S.demo){ S.ajustes = fn(JSON.parse(JSON.stringify(S.ajustes))); return; }
-  const cur = await GH.json('data/manual/ajustes.json');
-  const base = cur.data||{movimientos:{},reglas:[]}; base.movimientos ||= {}; base.reglas ||= [];
-  const nuevo = fn(base);
-  S.ajustesSha = await GH.put('data/manual/ajustes.json', b64(JSON.stringify(nuevo,null,1)), cur.sha, msg);
-  S.ajustes = nuevo;
+  const conBase = a => { a.movimientos ||= {}; a.reglas ||= []; return fn(a); };
+  if (S.demo){ S.ajustes = conBase(JSON.parse(JSON.stringify(S.ajustes))); return; }
+  const r = await guardarJSON('data/manual/ajustes.json', {movimientos:{},reglas:[]}, conBase, msg);
+  S.ajustes = r.data; S.ajustesSha = r.sha;
 }
 async function subirPDF(file, tipo){
   if(!file) return;
