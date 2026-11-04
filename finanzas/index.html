@@ -168,6 +168,22 @@ select.inp{min-height:44px;max-width:100%}
 .toast.show{opacity:1}
 .empty{color:var(--muted);font-size:14px;padding:12px 0}
 .setup{max-width:520px;margin:40px auto}
+.lock{max-width:360px;margin:0 auto;padding:46px 16px 24px;text-align:center}
+.lock .brand{justify-content:center;margin-bottom:18px}
+.lock h2{font-size:19px;margin:0 0 4px}
+.dots{display:flex;gap:14px;justify-content:center;margin:22px 0 8px;min-height:16px}
+.dots i{width:14px;height:14px;border-radius:50%;border:2px solid var(--accent-2);display:block}
+.dots i.on{background:var(--accent-2)}
+.dots.mal{animation:sacude .35s}
+@keyframes sacude{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+.pad{display:grid;grid-template-columns:repeat(3,76px);gap:16px 26px;justify-content:center;margin:18px auto 0}
+.pad button{width:76px;height:76px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-size:28px;font-weight:500;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.pad button:active{background:var(--surface-2)}
+.pad button.txt{border:0;background:transparent;font-size:15px;font-weight:600;color:var(--accent-2)}
+.pad button.ico{border:0;background:transparent;display:flex;align-items:center;justify-content:center}
+.lock .msg{min-height:20px;font-size:14px;color:var(--muted);margin-top:4px}
+.lock .msg.neg{color:var(--neg)}
+.lock .link{background:none;border:0;color:var(--muted);font:inherit;font-size:14px;text-decoration:underline;margin-top:22px;cursor:pointer}
 .setup ol{padding-left:20px;color:var(--muted);font-size:14px}
 .setup ol li{margin:4px 0}
 .chart svg{width:100%;height:auto;display:block}
@@ -231,6 +247,9 @@ const ICON = {
   in:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7L7 17M15 17H7V9"/></svg>',
   bolt:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h8l-1 8 10-12h-8z"/></svg>',
   doc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>',
+  lock:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>',
+  cara:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 8V5a2 2 0 012-2h3M16 3h3a2 2 0 012 2v3M21 16v3a2 2 0 01-2 2h-3M8 21H5a2 2 0 01-2-2v-3"/><path d="M9 9v1.5M15 9v1.5M12 9v4h-1M9 16c1.6 1.3 4.4 1.3 6 0"/></svg>',
+  borrar:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 5h11a1 1 0 011 1v12a1 1 0 01-1 1H9l-6-7z"/><path d="M12 9l6 6M18 9l-6 6"/></svg>',
   refresh:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 11-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>',
   logo:'<svg viewBox="0 0 24 24" fill="none" stroke="#b8f2d0" stroke-width="3" stroke-linecap="round"><path d="M6 17V9m6 8v-6m6 6V5"/></svg>',
 };
@@ -327,13 +346,13 @@ function shell(inner){
   const d=S.data; const gen = d?.generado ? new Date(d.generado) : null;
   return `<header class="top"><div class="brand"><div class="logo">${ICON.logo}</div><span>Mis finanzas</span></div><div class="sp"></div>
     <div class="upd">${S.demo?'<span class="tag warn">vista previa</span><br>':''}${gen?'Actualizado<br>'+gen.toLocaleString('es-CO',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}):''}</div>
-    <button class="iconbtn" id="btnUpd" title="Actualizar ahora">${ICON.refresh}</button></header>
+    ${S.cfg?.seg?`<button class="iconbtn" id="btnLock" title="Bloquear" aria-label="Bloquear">${ICON.lock}</button>`:''}<button class="iconbtn" id="btnUpd" title="Actualizar ahora">${ICON.refresh}</button></header>
     <nav class="tabs">${TABS.map(([k,l,i])=>`<button data-tab="${k}" class="${S.tab===k?'on':''}">${i}<span>${l}</span></button>`).join('')}</nav>
     <main>${inner}</main>
     <button class="fab" id="fab">${ICON.plus}<span>Efectivo</span></button>`;
 }
 function render(){
-  if (!S.data){ return; }
+  if (!S.data || S.bloqueado){ return; }
   const movs = movimientos();
   if (!S.mes || !ciclos().some(c=>c.id===S.mes)) S.mes = S.data.ciclo_actual || (ciclos()[0]||{}).id || hoyISO().slice(0,7);
   const v = {inicio:vInicio, movs:vMovs, deudas:vDeudas, pagos:vPagos, mas:vMas}[S.tab] || vInicio;
@@ -341,6 +360,7 @@ function render(){
   document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ S.tab=b.dataset.tab; S.sub=null; store.set('fin.tab',S.tab); render(); scrollTo(0,0); });
   $('#fab').onclick = ()=>abrirEfectivo();
   $('#btnUpd').onclick = actualizarAhora;
+  if ($('#btnLock')) $('#btnLock').onclick = bloquear;
   wire(movs);
 }
 function monthbar(){
@@ -582,8 +602,9 @@ function vMas(movs){
   if (S.sub==='facturas') return vFacturas();
   if (S.sub==='calidad') return vCalidad();
   if (S.sub==='conexion') return vConexion();
+  if (S.sub==='seguridad') return vSeguridad();
   const opts=[['efectivo',ICON.cash,'Efectivo','Registra gastos en efectivo e ingresos a mano'],['extractos',ICON.doc,'Extractos y documentos','Sube extractos (PDF) o facturas (ZIP/XML)'],
-    ['facturas',ICON.doc,'Facturas','Facturas electrónicas y su pago'],['calidad',ICON.list,'Calidad de datos','Qué tanto cubren los avisos del banco'],['conexion',ICON.bank,'Conexión','Repositorio, token y actualización']];
+    ['facturas',ICON.doc,'Facturas','Facturas electrónicas y su pago'],['calidad',ICON.list,'Calidad de datos','Qué tanto cubren los avisos del banco'],['seguridad',ICON.lock,'Seguridad','Clave, Face ID y bloqueo automático'],['conexion',ICON.bank,'Conexión','Repositorio, token y actualización']];
   return `<h1>Más</h1><div class="more-grid" style="margin-top:12px">${opts.map(([k,i,t,s])=>`<button data-sub="${k}"><div class="ico">${i}</div><b>${t}</b><span>${s}</span></button>`).join('')}</div>`;
 }
 const volver = `<button class="iconbtn" data-sub="" style="margin:6px 0">‹ Más</button>`;
@@ -651,7 +672,8 @@ function wire(movs){
   $('#btnEf') && ($('#btnEf').onclick=()=>abrirEfectivo('gasto'));
   $('#btnIng') && ($('#btnIng').onclick=()=>abrirEfectivo('ingreso'));
   $('#btnUpd2') && ($('#btnUpd2').onclick=actualizarAhora);
-  $('#btnSalir') && ($('#btnSalir').onclick=()=>{ if(confirm('¿Borrar el token de este dispositivo?')){ localStorage.removeItem('fin.cfg'); location.reload(); } });
+  $('#btnSalir') && ($('#btnSalir').onclick=async()=>{ if(confirm('¿Borrar el token de este dispositivo?')){ await SEG.idbDel('bio'); localStorage.removeItem('fin.cfg'); location.reload(); } });
+  wireSeguridad();
   document.querySelectorAll('[data-tema]').forEach(b=>b.onclick=()=>{ store.set('fin.tema',b.dataset.tema); aplicarTema(); render(); });
   const up=$('#upFile'); if(up) up.onchange=()=>subirPDF(up.files[0], $('#upTipo').value);
 }
@@ -847,6 +869,183 @@ async function actualizarAhora(){
   }
 }
 
+/* ═══════════════════ Seguridad: clave y Face ID ═══════════════════
+   El token de GitHub no queda guardado en claro: se cifra (AES-GCM) con una llave que sale de tu
+   clave (PBKDF2, 310.000 vueltas). Con Face ID se guarda otra copia cifrada con una llave que el
+   teléfono solo entrega después de reconocer tu cara (passkey WebAuthn, extensión PRF). Si el
+   navegador no tiene PRF, la llave queda en este dispositivo y solo se usa tras Face ID. */
+const SEG = {
+  ITER: 310000, te: new TextEncoder(), td: new TextDecoder(),
+  b64u(buf){ let s=''; new Uint8Array(buf).forEach(b=>s+=String.fromCharCode(b)); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); },
+  deb64u(s){ s=s.replace(/-/g,'+').replace(/_/g,'/'); while(s.length%4) s+='='; return Uint8Array.from(atob(s), c=>c.charCodeAt(0)); },
+  rnd(n){ return crypto.getRandomValues(new Uint8Array(n)); },
+  async llavePin(pin, salt){ const base=await crypto.subtle.importKey('raw', this.te.encode(pin), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey({name:'PBKDF2', salt, iterations:this.ITER, hash:'SHA-256'}, base, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']); },
+  async llavePRF(secreto){ const base=await crypto.subtle.importKey('raw', secreto, 'HKDF', false, ['deriveKey']);
+    return crypto.subtle.deriveKey({name:'HKDF', hash:'SHA-256', salt:this.te.encode('mis-finanzas'), info:this.te.encode('token-github')}, base, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']); },
+  async cifrar(llave, texto){ const iv=this.rnd(12); const ct=await crypto.subtle.encrypt({name:'AES-GCM', iv}, llave, this.te.encode(texto)); return {iv:this.b64u(iv), ct:this.b64u(ct)}; },
+  async descifrar(llave, o){ return this.td.decode(await crypto.subtle.decrypt({name:'AES-GCM', iv:this.deb64u(o.iv)}, llave, this.deb64u(o.ct))); },
+  db(){ return new Promise((ok,mal)=>{ const r=indexedDB.open('fin-seguridad',1); r.onupgradeneeded=()=>r.result.createObjectStore('llaves'); r.onsuccess=()=>ok(r.result); r.onerror=()=>mal(r.error); }); },
+  async idbPut(k,v){ const d=await this.db(); return new Promise((ok,mal)=>{ const t=d.transaction('llaves','readwrite'); t.objectStore('llaves').put(v,k); t.oncomplete=()=>ok(); t.onerror=()=>mal(t.error); }); },
+  async idbGet(k){ const d=await this.db(); return new Promise((ok,mal)=>{ const r=d.transaction('llaves','readonly').objectStore('llaves').get(k); r.onsuccess=()=>ok(r.result); r.onerror=()=>mal(r.error); }); },
+  async idbDel(k){ try{ const d=await this.db(); await new Promise(ok=>{ const t=d.transaction('llaves','readwrite'); t.objectStore('llaves').delete(k); t.oncomplete=ok; t.onerror=ok; }); }catch(e){} },
+  async bioDisponible(){ try{ return !!(window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()); }catch(e){ return false; } },
+  uvOk(authData){ const a=new Uint8Array(authData); return a.length>32 && (a[32] & 0x04)!==0; },
+};
+const BIO = /iPhone|iPad|Macintosh/.test(navigator.userAgent) ? 'Face ID' : 'huella o rostro';
+const AUTO_OPC = [[0,'Al salir'],[2,'2 min'],[10,'10 min']];
+
+/* Guarda la configuración sin el token en claro */
+function guardarCfg(){ const {token, ...resto} = S.cfg; store.set('fin.cfg', resto); }
+
+function intentos(){ return store.get('fin.intentos', {n:0, hasta:0}); }
+
+/* Teclado numérico. modo: 'entrar' | 'crear' | 'confirmar' */
+function teclado({titulo, sub, n, alCompletar, conBio, pie}){
+  let pin='';
+  $('#app').innerHTML = `<div class="lock"><div class="brand"><div class="logo">${ICON.logo}</div><span style="font-size:20px">Mis finanzas</span></div>
+    <h2>${titulo}</h2><div class="sub">${sub||''}</div>
+    <div class="dots" id="dots"></div><div class="msg" id="lmsg"></div>
+    <div class="pad">${[1,2,3,4,5,6,7,8,9].map(d=>`<button data-d="${d}">${d}</button>`).join('')}
+      ${conBio?`<button class="ico" id="kBio" aria-label="Entrar con ${BIO}">${ICON.cara}</button>`:(n?'<span></span>':`<button class="txt" id="kOk">Listo</button>`)}
+      <button data-d="0">0</button><button class="ico" id="kDel" aria-label="Borrar">${ICON.borrar}</button></div>
+    ${pie||''}</div>`;
+  const pintar=()=>{ const total=n||Math.max(4,pin.length); $('#dots').innerHTML=Array.from({length:total},(_,i)=>`<i class="${i<pin.length?'on':''}"></i>`).join(''); };
+  const msg=(t,mal)=>{ const m=$('#lmsg'); m.textContent=t||''; m.className='msg'+(mal?' neg':''); };
+  const fallo=t=>{ pin=''; pintar(); msg(t,true); const d=$('#dots'); d.classList.remove('mal'); void d.offsetWidth; d.classList.add('mal'); };
+  let ocupado=false;
+  const enviar=async()=>{ if(ocupado) return; ocupado=true; msg('Verificando…'); try{ await alCompletar(pin, fallo); }finally{ ocupado=false; } };
+  const tecla=d=>{ if(ocupado) return; if(d==='del'){ pin=pin.slice(0,-1); msg(''); pintar(); return; }
+    if(pin.length>=8) return; pin+=d; msg(''); pintar(); if(n && pin.length===n) enviar(); };
+  document.querySelectorAll('.pad [data-d]').forEach(b=>b.onclick=()=>tecla(b.dataset.d));
+  $('#kDel').onclick=()=>tecla('del');
+  if($('#kOk')) $('#kOk').onclick=()=>{ if(pin.length<4){ fallo('Usa entre 4 y 8 dígitos'); return; } enviar(); };
+  document.onkeydown=e=>{ if(!$('.lock')) { document.onkeydown=null; return; }
+    if(/^[0-9]$/.test(e.key)) tecla(e.key); else if(e.key==='Backspace') tecla('del'); else if(e.key==='Enter' && $('#kOk')) $('#kOk').click(); };
+  pintar();
+  return {msg, fallo};
+}
+
+function vCrearClave(anterior){
+  const sub = anterior ? 'Ahora la app se protege con una clave. Elige entre 4 y 8 dígitos y luego toca Listo.' : 'Elige entre 4 y 8 dígitos y luego toca Listo.';
+  teclado({titulo:'Crea tu clave', sub, alCompletar: async (pin)=>{
+    teclado({titulo:'Repite tu clave', sub:'Para confirmar.', n:pin.length, alCompletar: async (pin2, fallo)=>{
+      if (pin2!==pin){ fallo('No coincide. Vuelve a intentarlo.'); setTimeout(()=>vCrearClave(anterior),900); return; }
+      await fijarClave(pin);
+      if (await SEG.bioDisponible()) vOfrecerBio(); else entrar();
+    }});
+  }});
+}
+async function fijarClave(pin){
+  const salt=SEG.rnd(16); const llave=await SEG.llavePin(pin, salt);
+  S.cfg.seg = {...(S.cfg.seg||{}), pin:{salt:SEG.b64u(salt), n:pin.length, ...(await SEG.cifrar(llave, S.cfg.token))}, auto:S.cfg.seg?.auto ?? 2};
+  guardarCfg();
+}
+function vOfrecerBio(){
+  $('#app').innerHTML = `<div class="lock"><div class="brand"><div class="logo">${ICON.logo}</div><span style="font-size:20px">Mis finanzas</span></div>
+    <div style="color:var(--accent-2);margin:10px 0">${ICON.cara.replace('width="34" height="34"','width="64" height="64"')}</div>
+    <h2>¿Entrar con ${BIO}?</h2><div class="sub">Así no tienes que escribir la clave cada vez. El teléfono te pedirá guardar una llave de acceso para esta página.</div>
+    <button class="btn" id="bSi">Activar ${BIO}</button><button class="btn sec" id="bNo">Ahora no</button><div class="msg" id="lmsg"></div></div>`;
+  $('#bSi').onclick=async()=>{ $('#bSi').disabled=true; try{ await activarBio(); toast(BIO+' activado'); entrar(); }
+    catch(e){ $('#bSi').disabled=false; $('#lmsg').textContent=errorBio(e); $('#lmsg').className='msg neg'; } };
+  $('#bNo').onclick=()=>entrar();
+}
+function errorBio(e){
+  if (e?.name==='NotAllowedError') return `Se canceló o no se pudo usar ${BIO}. Puedes intentarlo de nuevo.`;
+  if (e?.name==='InvalidStateError') return `Ya hay una llave guardada para esta página. Intenta de nuevo.`;
+  return e?.message || String(e);
+}
+async function activarBio(){
+  const prfSalt=SEG.rnd(32);
+  const cred = await navigator.credentials.create({publicKey:{
+    rp:{name:'Mis finanzas', id:location.hostname}, user:{id:SEG.rnd(16), name:'Mis finanzas', displayName:'Mis finanzas'},
+    challenge:SEG.rnd(32), pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+    authenticatorSelection:{authenticatorAttachment:'platform', userVerification:'required', residentKey:'preferred'},
+    timeout:60000, attestation:'none', extensions:{prf:{eval:{first:prfSalt}}} }});
+  const ext = cred.getClientExtensionResults?.() || {};
+  let secreto = ext.prf?.results?.first;
+  if (!secreto && ext.prf?.enabled){
+    try{ const a = await navigator.credentials.get({publicKey:{challenge:SEG.rnd(32), rpId:location.hostname, allowCredentials:[{type:'public-key', id:cred.rawId}],
+        userVerification:'required', timeout:60000, extensions:{prf:{eval:{first:prfSalt}}}}});
+      secreto = a.getClientExtensionResults?.().prf?.results?.first; }catch(e){ /* sigue sin PRF */ }
+  }
+  let llave, modo;
+  if (secreto){ llave=await SEG.llavePRF(secreto); modo='prf'; }
+  else { llave=await crypto.subtle.generateKey({name:'AES-GCM', length:256}, false, ['encrypt','decrypt']); await SEG.idbPut('bio', llave); modo='llave'; }
+  S.cfg.seg.bio = {credId:SEG.b64u(cred.rawId), modo, prfSalt:SEG.b64u(prfSalt), ...(await SEG.cifrar(llave, S.cfg.token))};
+  guardarCfg();
+}
+async function tokenConBio(){
+  const b=S.cfg.seg.bio;
+  const pk={challenge:SEG.rnd(32), rpId:location.hostname, allowCredentials:[{type:'public-key', id:SEG.deb64u(b.credId)}], userVerification:'required', timeout:60000};
+  if (b.modo==='prf') pk.extensions={prf:{eval:{first:SEG.deb64u(b.prfSalt)}}};
+  const a = await navigator.credentials.get({publicKey:pk});
+  if (SEG.b64u(a.rawId)!==b.credId || !SEG.uvOk(a.response.authenticatorData)) throw new Error(`${BIO} no confirmó tu identidad.`);
+  let llave;
+  if (b.modo==='prf'){ const sec=a.getClientExtensionResults?.().prf?.results?.first; if(!sec) throw new Error(`${BIO} no entregó la llave. Entra con tu clave.`); llave=await SEG.llavePRF(sec); }
+  else { llave=await SEG.idbGet('bio'); if(!llave) throw new Error(`Se perdió la llave de ${BIO} en este teléfono. Entra con tu clave y vuelve a activarlo en Más → Seguridad.`); }
+  return SEG.descifrar(llave, b);
+}
+function vBloqueo(alAbrir){
+  S.bloqueado=true; S.cfg.token=null; try{ cerrarSheet(); }catch(e){}
+  const seg=S.cfg.seg; const conBio=!!seg.bio;
+  const k = teclado({titulo:'Ingresa tu clave', sub: conBio?`O toca la cara para usar ${BIO}.`:'', n:seg.pin.n, conBio,
+    pie:`<button class="link" id="kOlvide">¿Olvidaste tu clave?</button>`,
+    alCompletar: async (pin, fallo)=>{
+      const it=intentos();
+      if (it.hasta>Date.now()){ fallo(`Demasiados intentos. Espera ${Math.ceil((it.hasta-Date.now())/1000)} segundos.`); return; }
+      try{ const llave=await SEG.llavePin(pin, SEG.deb64u(seg.pin.salt)); S.cfg.token=await SEG.descifrar(llave, seg.pin); }
+      catch(e){ const n=it.n+1; store.set('fin.intentos', {n, hasta: n>=5 ? Date.now()+30000*(n-4) : 0});
+        fallo(n>=5?'Clave incorrecta. Espera 30 segundos.':'Clave incorrecta'); return; }
+      store.set('fin.intentos', {n:0, hasta:0}); entrar();
+    }});
+  const usarBio=async(silencioso)=>{ try{ k.msg(''); S.cfg.token=await tokenConBio(); store.set('fin.intentos',{n:0,hasta:0}); entrar(); }
+    catch(e){ if(!silencioso) k.msg(errorBio(e), true); } };
+  if ($('#kBio')) $('#kBio').onclick=()=>usarBio(false);
+  $('#kOlvide').onclick=async()=>{ if(!confirm('Se borrará el acceso guardado en este teléfono. Para entrar de nuevo tendrás que pegar tu token de GitHub (o crear uno nuevo). ¿Continuar?')) return;
+    await SEG.idbDel('bio'); const {owner,repo,branch}=S.cfg; S.cfg={owner,repo,branch}; localStorage.removeItem('fin.cfg'); S.bloqueado=false; vSetup(); };
+  if (conBio && alAbrir) usarBio(true);
+}
+async function entrar(){
+  S.bloqueado=false; document.onkeydown=null;
+  if (S.data){ render(); try{ await cargar(); render(); }catch(e){} return; }
+  $('#app').innerHTML='<div class="setup"><div class="empty">Cargando tus finanzas…</div></div>';
+  try{ await cargar(); render(); }catch(e){ if(/401|403/.test(e.message)) vSetup('GitHub rechazó el token guardado (venció o lo revocaste). Pega uno nuevo.'); else { toast(e.message,6000); vBloqueo(); } }
+}
+function bloquear(){ if (S.cfg?.seg?.pin) vBloqueo(); }
+/* Bloqueo automático al volver a la app después de un rato */
+document.addEventListener('visibilitychange', ()=>{
+  if (!S.cfg?.seg?.pin || S.demo) return;
+  if (document.hidden){ S.ocultoDesde=Date.now(); if ((S.cfg.seg.auto??2)===0 && !S.bloqueado) vBloqueo(); return; }
+  if (!S.bloqueado && S.ocultoDesde && Date.now()-S.ocultoDesde > (S.cfg.seg.auto??2)*60000) vBloqueo(true);
+});
+function vSeguridad(){
+  const seg=S.cfg?.seg||{};
+  return `${volver}<h1>Seguridad</h1><div class="sub">Tu token de GitHub queda cifrado en este teléfono; sin tu clave o tu ${BIO} no se puede usar.</div>
+  <div class="card"><h2>Clave</h2><div class="sub">${seg.pin?`Tienes una clave de ${seg.pin.n} dígitos.`:'Aún no tienes clave.'}</div>
+    <button class="btn sec" id="sgClave">${seg.pin?'Cambiar clave':'Crear clave'}</button>
+    ${seg.pin?'<button class="btn sec" id="sgLock">Bloquear ahora</button>':''}</div>
+  <div class="card"><h2>${BIO}</h2><div class="sub" id="sgBioInfo">${seg.bio?`Activado${seg.bio.modo==='prf'?' (la llave la entrega el teléfono solo con tu cara)':''}.`:'No está activado.'}</div>
+    <button class="btn ${seg.bio?'danger':''}" id="sgBio">${seg.bio?'Desactivar '+BIO:'Activar '+BIO}</button></div>
+  <div class="card"><h2>Bloqueo automático</h2><div class="sub">Pedir la clave al volver a la app después de:</div>
+    <div class="seg" style="margin-top:8px">${AUTO_OPC.map(([v,l])=>`<button data-auto="${v}" class="${(seg.auto??2)===v?'on':''}">${l}</button>`).join('')}</div></div>`;
+}
+function wireSeguridad(){
+  if (!$('#sgClave')) return;
+  $('#sgClave').onclick=()=>{ S.bloqueado=true; teclado({titulo:'Nueva clave', sub:'Elige entre 4 y 8 dígitos y toca Listo.', alCompletar: async pin=>{
+      teclado({titulo:'Repite la nueva clave', n:pin.length, alCompletar: async (pin2, fallo)=>{
+        if(pin2!==pin){ fallo('No coincide.'); setTimeout(()=>{ S.bloqueado=false; render(); },900); return; }
+        await fijarClave(pin); S.bloqueado=false; document.onkeydown=null; render(); toast('Clave actualizada'); }}); }});
+    const pie=document.createElement('button'); pie.className='link'; pie.textContent='Cancelar'; pie.onclick=()=>{ S.bloqueado=false; document.onkeydown=null; render(); }; $('.lock').appendChild(pie); };
+  if ($('#sgLock')) $('#sgLock').onclick=bloquear;
+  $('#sgBio').onclick=async()=>{
+    if (S.cfg.seg?.bio){ if(!confirm(`¿Desactivar ${BIO}?`)) return; delete S.cfg.seg.bio; await SEG.idbDel('bio'); guardarCfg(); render(); toast(BIO+' desactivado'); return; }
+    if (!S.cfg.seg?.pin){ toast('Primero crea una clave'); return; }
+    if (!(await SEG.bioDisponible())){ toast(`Este navegador no permite ${BIO} en páginas web. Sigue usando tu clave.`,6000); return; }
+    try{ await activarBio(); render(); toast(BIO+' activado'); }catch(e){ toast(errorBio(e),6000); } };
+  document.querySelectorAll('[data-auto]').forEach(b=>b.onclick=()=>{ S.cfg.seg.auto=+b.dataset.auto; guardarCfg(); render(); });
+}
+
 /* ═══════════════════ Configuración inicial ═══════════════════ */
 function vSetup(err){
   const c=S.cfg||{owner:'fagarciafo',repo:'gastos',branch:'main',token:''};
@@ -855,21 +1054,23 @@ function vSetup(err){
   ${err?`<div class="note neg">${esc(err)}</div>`:''}
   <div class="row2"><div><label class="f">Usuario u organización</label><input class="inp" id="sOwner" value="${esc(c.owner)}" placeholder="tu-usuario"></div>
   <div><label class="f">Repositorio</label><input class="inp" id="sRepo" value="${esc(c.repo)}"></div></div>
-  <label class="f">Token de acceso (fine-grained)</label><input class="inp" id="sTok" type="password" value="${esc(c.token)}" placeholder="github_pat_…" autocomplete="off">
+  <label class="f">Token de acceso (fine-grained)</label><input class="inp" id="sTok" type="password" value="${esc(c.token||'')}" placeholder="github_pat_…" autocomplete="off">
   <button class="btn" id="sGo">Entrar</button>
   <ol><li>En GitHub: Settings → Developer settings → Fine-grained tokens → Generate new token.</li><li>Repository access: solo el repositorio de finanzas.</li><li>Permisos: <b>Contents</b> lectura y escritura, <b>Actions</b> lectura y escritura.</li></ol></div></div>`;
   $('#sGo').onclick=async()=>{ S.cfg={owner:$('#sOwner').value.trim(),repo:$('#sRepo').value.trim(),branch:'main',token:$('#sTok').value.trim()};
     $('#sGo').disabled=true; $('#sGo').textContent='Conectando…';
-    try{ await cargar(); store.set('fin.cfg',S.cfg); render(); }catch(e){ vSetup(e.message); } };
+    try{ await cargar(); vCrearClave(); }catch(e){ vSetup(e.message); } };
 }
 function aplicarTema(){ const t=store.get('fin.tema','auto'); if(t==='auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme',t); }
 
 (async function init(){
   aplicarTema();
   if (window.FIN_DEMO){ await cargar(); render(); return; }
+  if (S.cfg?.seg?.pin){ vBloqueo(true); return; }
   if (!S.cfg?.token){ vSetup(); return; }
+  // Instalación anterior: el token estaba guardado sin cifrar. Se pide crear la clave.
   $('#app').innerHTML='<div class="setup"><div class="empty">Cargando tus finanzas…</div></div>';
-  try{ await cargar(); render(); }catch(e){ vSetup(e.message); }
+  try{ await cargar(); vCrearClave(true); }catch(e){ vSetup(e.message); }
 })();
 </script>
 </body>
