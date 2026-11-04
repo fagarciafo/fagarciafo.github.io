@@ -43,7 +43,7 @@ a{color:var(--accent-2)}
 .app{max-width:1100px;margin:0 auto;padding:0 16px calc(92px + env(safe-area-inset-bottom))}
 header.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);
   display:flex;align-items:center;gap:10px;padding:12px 16px;margin:0 -16px 8px;border-bottom:1px solid var(--border)}
-.brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-.01em}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
 .brand .logo{width:28px;height:28px;border-radius:8px;background:var(--accent);display:grid;place-items:center}
 .brand .logo svg{width:18px;height:18px}
 .top .sp{flex:1}
@@ -78,7 +78,7 @@ h2{font-size:16px;margin:0 0 10px;letter-spacing:-.01em}
 .card+.card{margin-top:12px}
 .grid>.card+.card{margin-top:0}
 .kpi .lab{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
-.kpi .val{font-size:22px;font-weight:700;letter-spacing:-.02em;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi .val{font-size:clamp(17px,5.2vw,22px);font-weight:700;letter-spacing:-.02em;margin-top:2px;white-space:nowrap}
 .kpi .foot{font-size:12px;color:var(--muted);margin-top:2px}
 .pos{color:var(--pos)}.neg{color:var(--neg)}.warn{color:var(--warn)}
 .monthbar{display:flex;align-items:center;gap:8px;margin:6px 0 12px;flex-wrap:wrap}
@@ -145,7 +145,11 @@ h2{font-size:16px;margin:0 0 10px;letter-spacing:-.01em}
 label.f{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
 .inp{width:100%;border:1px solid var(--border);background:var(--surface);border-radius:10px;padding:10px 12px}
 .inp.big{font-size:24px;font-weight:700}
-.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.row2>div{min-width:0}
+input[type="date"].inp{-webkit-appearance:none;appearance:none;min-width:0;max-width:100%;display:block;min-height:44px;line-height:1.2}
+select.inp{min-height:44px;max-width:100%}
+@media (max-width:420px){.row2{grid-template-columns:1fr;gap:0}}
 .btn{border:0;border-radius:12px;padding:12px 16px;font-weight:600;cursor:pointer;background:var(--accent);color:#fff;width:100%;margin-top:14px}
 :root[data-theme="dark"] .btn{color:#0c1210}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .btn{color:#0c1210}}
@@ -278,11 +282,18 @@ function movimientos(){
 const norm = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9*/&.\- ]+/g,' ').replace(/\s+/g,' ').trim();
 
 /* ═══════════════════ Cálculos del mes ═══════════════════ */
+/* Ciclos de pago: de nómina a nómina (26 o el día siguiente). El id es el mes en que termina. */
+function ciclos(){ return S.data.ciclos||[]; }
+function ciclo(id){ return ciclos().find(c=>c.id===id) || {id, inicio:id+'-01', fin:id+'-31', etiqueta:mesNombre(id)}; }
+function enCiclo(fecha, id){ const c=ciclo(id); return fecha>=c.inicio && fecha<=c.fin; }
+function cicloDe(fecha){ const c=ciclos().find(c=>fecha>=c.inicio && fecha<=c.fin); return c?c.id:fecha.slice(0,7); }
 function resumenMes(movs, mes){
-  const r = {ingresos:0, consumo:0, consumoTC:0, efectivo:0, retiros:0, deudas:0, ahorro:0, avances:0, costos:0, porCat:{}, n:0, extra:0, porClasificar:0, nPorClasificar:0};
+  const r = {ingresos:0, consumo:0, consumoTC:0, efectivo:0, retiros:0, deudas:0, ahorro:0, avances:0, costos:0, porCat:{}, n:0, extra:0, porClasificar:0, nPorClasificar:0, terPag:0, terReem:0};
+  const c = ciclo(mes);
   for (const m of movs){
-    if (!m.fecha.startsWith(mes)) continue;
+    if (m.fecha<c.inicio || m.fecha>c.fin) continue;
     r.n++;
+    if (m.clase==='tercero'){ if(m.dir==='out') r.terPag+=m.monto; else r.terReem+=m.monto; continue; }
     if (m.clase==='ingreso') r.ingresos+=m.monto;
     else if (m.clase==='consumo' && m.dir==='out'){
       r.consumo+=m.monto; r.porCat[m.categoria]=(r.porCat[m.categoria]||0)+m.monto;
@@ -319,7 +330,7 @@ function shell(inner){
 function render(){
   if (!S.data){ return; }
   const movs = movimientos();
-  S.mes ||= (S.data.meses||[])[0] || hoyISO().slice(0,7);
+  if (!S.mes || !ciclos().some(c=>c.id===S.mes)) S.mes = S.data.ciclo_actual || (ciclos()[0]||{}).id || hoyISO().slice(0,7);
   const v = {inicio:vInicio, movs:vMovs, deudas:vDeudas, pagos:vPagos, mas:vMas}[S.tab] || vInicio;
   $('#app').innerHTML = shell(v(movs));
   document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ S.tab=b.dataset.tab; S.sub=null; store.set('fin.tab',S.tab); render(); scrollTo(0,0); });
@@ -328,9 +339,11 @@ function render(){
   wire(movs);
 }
 function monthbar(){
-  const ms = S.data.meses||[]; const i = ms.indexOf(S.mes);
-  return `<div class="monthbar"><button class="iconbtn" data-mes="${ms[i+1]||''}" ${i>=ms.length-1?'disabled':''} aria-label="Mes anterior">‹</button>
-    <div class="m">${mesNombre(S.mes)}</div><button class="iconbtn" data-mes="${ms[i-1]||''}" ${i<=0?'disabled':''} aria-label="Mes siguiente">›</button></div>`;
+  const ms = ciclos().map(c=>c.id); const i = ms.indexOf(S.mes); const c = ciclo(S.mes);
+  const act = S.mes===S.data.ciclo_actual;
+  return `<div class="monthbar"><button class="iconbtn" data-mes="${ms[i+1]||''}" ${i>=ms.length-1?'disabled':''} aria-label="Ciclo anterior">‹</button>
+    <div class="m">${esc(c.etiqueta)}<div class="sub" style="font-weight:400">${act?'ciclo actual':'ciclo de nómina'}</div></div>
+    <button class="iconbtn" data-mes="${ms[i-1]||''}" ${i<=0?'disabled':''} aria-label="Ciclo siguiente">›</button></div>`;
 }
 
 /* ─────────── Inicio ─────────── */
@@ -340,12 +353,12 @@ function vInicio(movs){
   const cats = Object.entries(r.porCat).sort((a,b)=>b[1]-a[1]);
   const maxV = Math.max(1, ...cats.map(c=>Math.max(c[1], pres[c[0]]||0)));
   const alertas = S.data.alertas||[];
-  const prox = (S.data.obligaciones||[]).filter(o=>o.fecha>=S.data.hoy && !['pagado'].includes(o.estado)).slice(0,6);
+  const prox = (S.data.obligaciones||[]).filter(o=>o.ciclo===S.data.ciclo_actual && o.tipo!=='variable' && !['pagado'].includes(o.estado)).slice(0,7);
   const cal = S.data.calidad?.[S.mes];
   const deudaTotal = (S.data.deudas||[]).reduce((a,d)=>a+(d.saldo||0),0);
   return `${monthbar()}
   <div class="grid g4">
-    <div class="card kpi"><div class="lab">Entró</div><div class="val num pos">${fmtS(r.ingresos)}</div><div class="foot">${r.avances?`+ ${fmtS(r.avances)} prestados (avances)`:'Ingresos del mes'}</div></div>
+    <div class="card kpi"><div class="lab">Entró</div><div class="val num pos">${fmtS(r.ingresos)}</div><div class="foot">${r.avances?`+ ${fmtS(r.avances)} prestados (avances)`:'Ingresos del ciclo'}</div></div>
     <div class="card kpi"><div class="lab">Salió de tu bolsillo</div><div class="val num">${fmtS(r.salidas)}</div><div class="foot">Gastos de contado, deudas y retiros</div></div>
     <div class="card kpi"><div class="lab">Balance</div><div class="val num ${r.balance<0?'neg':'pos'}">${fmtS(r.balance)}</div><div class="foot">${r.balance<0?'Gastaste más de lo que entró':'Te quedó disponible'}</div></div>
     <div class="card kpi"><div class="lab">Compras con tarjeta</div><div class="val num warn">${fmtS(r.consumoTC)}</div><div class="foot">Se vuelven deuda · total deudas ${fmtS(deudaTotal)}</div></div>
@@ -357,22 +370,23 @@ function vInicio(movs){
           return `<div class="row" data-cat="${esc(c)}"><div class="n">${esc(c)}</div><div class="v num">${fmt(v)}</div>
           <div class="track"><div class="fill ${over?'over':''}" style="width:${(100*v/maxV).toFixed(1)}%"></div>${p?`<div class="budget" style="left:${(100*p/maxV).toFixed(1)}%"></div>`:''}</div>
           ${p?`<div class="meta">Presupuesto ${fmt(p)} · ${over?'<span class="neg">te pasaste '+fmt(v-p)+'</span>':'quedan '+fmt(p-v)}</div>`:''}</div>`; }).join('')}</div>`
-          : '<div class="empty">Sin gastos registrados este mes.</div>'}
-        ${r.extra?`<div class="note">Incluye ${fmt(r.extra)} en compras grandes (más de $1 millón). Sin ellas, el gasto del mes fue ${fmt(r.gastoTotal-r.extra)}.</div>`:''}
+          : '<div class="empty">Sin gastos registrados en este ciclo.</div>'}
+        ${r.extra?`<div class="note">Incluye ${fmt(r.extra)} en compras grandes (más de $1 millón). Sin ellas, el gasto del ciclo fue ${fmt(r.gastoTotal-r.extra)}.</div>`:''}
+        ${(r.terPag||r.terReem)?`<div class="note">No se cuenta como gasto ni ingreso: pagaste ${fmt(r.terPag)} por cuenta de otra persona y te reembolsaron ${fmt(r.terReem)}. <a href="#" data-filtro="tercero">Ver</a></div>`:''}
         ${r.sinDetallar?`<div class="note">Retiraste ${fmt(r.retiros)} en efectivo y registraste ${fmt(r.efectivo)}. <a href="#" data-go="efectivo">Registra en qué se fue el resto</a>.</div>`:''}
       </div>
-      <div class="card chart"><h2>Últimos meses</h2>${grafMeses(movs)}</div>
+      <div class="card chart"><h2>Últimos ciclos</h2>${grafMeses(movs)}</div>
     </div>
     <div>
       <div class="card"><h2>Avisos</h2>${alertas.length? alertas.map(a=>`<div class="alert"><div class="dot ${a.nivel}"></div><div><b>${esc(a.titulo)}</b>${a.fecha?` <span class="tag">${fechaCorta(a.fecha)}</span>`:''}<div class="d">${esc(a.detalle||'')}</div></div></div>`).join('') : '<div class="empty">Todo en orden.</div>'}</div>
-      <div class="card"><h2>Próximos pagos</h2>${prox.length? prox.map(obRow).join('') : '<div class="empty">No hay pagos próximos.</div>'}
+      <div class="card"><h2>Pendientes del ciclo <span class="sub">· ${esc(ciclo(S.data.ciclo_actual).etiqueta)}</span></h2>${prox.length? prox.map(obRow).join('') : '<div class="empty">Todo pagado en este ciclo.</div>'}
         <button class="btn sec" data-go-tab="pagos">Ver calendario</button></div>
       ${cal?`<div class="card"><h2>¿De dónde salen estos datos?</h2>${coberturaHTML(cal)}</div>`:''}
     </div>
   </div>`;
 }
 function grafMeses(movs){
-  const ms = (S.data.meses||[]).slice(0,7).reverse();
+  const ms = ciclos().filter(c=>c.inicio<=S.data.hoy).slice(0,7).map(c=>c.id).reverse();
   if(!ms.length) return '<div class="empty">Sin datos.</div>';
   const rs = ms.map(m=>({m, ...resumenMes(movs,m)}));
   const max = Math.max(1,...rs.map(r=>Math.max(r.ingresos,r.gastoTotal)));
@@ -383,8 +397,8 @@ function grafMeses(movs){
   rs.forEach((r,i)=>{ const x=pad+i*bw+bw*0.18, w=bw*0.3;
     s+=`<rect x="${x}" y="${y(r.ingresos)}" width="${w}" height="${H-22-y(r.ingresos)}" rx="3" fill="var(--c1)"><title>Ingresos ${fmt(r.ingresos)}</title></rect>`;
     s+=`<rect x="${x+w+3}" y="${y(r.gastoTotal)}" width="${w}" height="${H-22-y(r.gastoTotal)}" rx="3" fill="var(--c3)"><title>Gastos ${fmt(r.gastoTotal)}</title></rect>`;
-    s+=`<text x="${x+w}" y="${H-6}" font-size="11" text-anchor="middle" fill="var(--muted)" ${r.m===S.mes?'font-weight="700"':''}>${MES_C[+r.m.slice(5)-1]}</text>`; });
-  return s+`</svg><div class="legend"><span><i style="background:var(--c1)"></i>Ingresos</span><span><i style="background:var(--c3)"></i>Gastos (consumo, incluye tarjeta)</span></div>`;
+    s+=`<text x="${x+w}" y="${H-6}" font-size="11" text-anchor="middle" fill="var(--muted)" ${r.m===S.mes?'font-weight="700"':''}>${esc(ciclo(r.m).etiqueta.split('–')[1]||'').trim()}</text>`; });
+  return s+`</svg><div class="legend"><span><i style="background:var(--c1)"></i>Ingresos</span><span><i style="background:var(--c3)"></i>Gastos (consumo, incluye tarjeta)</span></div><div class="sub" style="margin-top:4px">Cada barra es un ciclo de nómina; la etiqueta es el día en que termina.</div>`;
 }
 function coberturaHTML(c){
   const parts=[['notificado_y_confirmado','Avisado y confirmado en extracto','var(--c1)'],['solo_notificacion','Solo aviso del banco','var(--c2)'],['solo_extracto','Solo en el extracto (sin aviso)','var(--c3)'],['solo_factura','Solo factura electrónica','var(--c4)'],['manual','Registrado a mano','var(--c6)']];
@@ -396,16 +410,17 @@ function coberturaHTML(c){
 }
 
 /* ─────────── Movimientos ─────────── */
-const FILTROS = [['todos','Todos'],['consumo','Gastos'],['ingreso','Ingresos'],['deuda','Pagos a deudas'],['efectivo','Efectivo'],['clasificar','Por clasificar'],['sinaviso','Sin aviso del banco'],['otros','Avances y otros']];
+const FILTROS = [['todos','Todos'],['consumo','Gastos'],['ingreso','Ingresos'],['deuda','Pagos a deudas'],['efectivo','Efectivo'],['clasificar','Por clasificar'],['sinaviso','Sin aviso del banco'],['tercero','Por cuenta de otros'],['otros','Avances y otros']];
 function vMovs(movs){
-  let xs = movs.filter(m=>m.fecha.startsWith(S.mes));
+  let xs = movs.filter(m=>enCiclo(m.fecha, S.mes));
   const f=S.filtro;
   xs = xs.filter(m=> f==='todos' ? true : f==='efectivo' ? (m.medio==='Efectivo'||m.clase==='retiro') : f==='clasificar' ? m.categoria==='Por clasificar' :
      f==='sinaviso' ? (m.fuentes||[]).every(s=>!['davibank_tarjeta','davibank_online','davibank_debito_auto','pse','compensar_avance'].includes(s)) && !m.manual :
      f==='otros' ? ['credito','ahorro','interno','costo_financiero','retiro'].includes(m.clase) : m.clase===f);
+  if (f!=='tercero' && f!=='todos') xs = xs.filter(m=>m.clase!=='tercero');
   if (S.cat) xs = xs.filter(m=>m.categoria===S.cat);
   if (S.q){ const q=norm(S.q); xs = xs.filter(m=>norm([m.contraparte,m.descripcion,m.detalle,m.categoria,m.emisor,String(m.monto)].join(' ')).includes(q)); }
-  const tot = xs.reduce((a,m)=>a+(m.dir==='in'?m.monto:-m.monto),0);
+  const tot = xs.filter(m=>!['tercero','interno'].includes(m.clase)).reduce((a,m)=>a+(m.dir==='in'?m.monto:-m.monto),0);
   let html = `${monthbar()}<input class="search" id="q" placeholder="Buscar comercio, categoría o valor" value="${esc(S.q)}">
   <div class="chips">${FILTROS.map(([k,l])=>`<button class="chip ${S.filtro===k?'on':''}" data-f="${k}">${l}</button>`).join('')}</div>
   ${S.cat?`<div style="margin:8px 0"><span class="chip on" data-clearcat>${esc(S.cat)} ✕</span></div>`:''}
@@ -427,13 +442,13 @@ function fuentesBadges(m){
   if(f.has('desprendible')) b.push('<i class="e">desprendible</i>');
   return `<span class="src">${b.join('')}</span>`;
 }
-const CLASE_TXT = {consumo:'',ingreso:'Ingreso',deuda:'Pago a deuda',credito:'Plata prestada',ahorro:'Ahorro',retiro:'Retiro de efectivo',costo_financiero:'Intereses y cargos',interno:'Entre tus cuentas'};
+const CLASE_TXT = {consumo:'',ingreso:'Ingreso',deuda:'Pago a deuda',credito:'Plata prestada',ahorro:'Ahorro',retiro:'Retiro de efectivo',costo_financiero:'Intereses y cargos',interno:'Entre tus cuentas',tercero:'Por cuenta de otra persona'};
 function movRow(m){
   const signo = m.dir==='in' ? '+' : '−';
   const col = m.clase==='ingreso' ? 'pos' : (['interno'].includes(m.clase)?'':'');
   return `<div class="it" data-mov="${esc(m.id)}"><div class="ico">${iconoMedio(m)}</div><div class="main">
     <div class="t">${esc(m.contraparte)}</div><div class="s"><span class="ell">${esc(m.categoria||'')}${CLASE_TXT[m.clase]?' · '+CLASE_TXT[m.clase]:''} · ${esc(m.medio||'')}</span>${fuentesBadges(m)}</div></div>
-    <div class="amt num ${col}" style="${m.clase==='interno'?'opacity:.5':''}">${signo}${fmt(m.monto)}${m.cuotas&&m.cuotas!=='1/1'?`<small>cuota ${esc(m.cuotas)}</small>`:(m.hora?`<small>${esc(m.hora)}</small>`:'')}</div></div>`;
+    <div class="amt num ${col}" style="${['interno','tercero'].includes(m.clase)?'opacity:.5':''}">${signo}${fmt(m.monto)}${m.cuotas&&m.cuotas!=='1/1'?`<small>cuota ${esc(m.cuotas)}</small>`:(m.hora?`<small>${esc(m.hora)}</small>`:'')}</div></div>`;
 }
 
 /* ─────────── Deudas ─────────── */
@@ -461,7 +476,18 @@ function vDeudas(){
   <div class="note">Si te sobra plata para abonar, hazlo en este orden (de la más cara a la más barata): ${orden.map(d=>`<b>${esc(d.nombre)}</b>${tasaEA(d)?' ('+tasaEA(d)+'%)':''}`).join(' → ')}.</div>
   <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));margin-top:12px">${ds.map(debtCard).join('')}</div>`;
 }
-function estadoTag(e){ const m={pagado:'pos',pendiente:'warn',vencido:'neg','por confirmar':'info','sin confirmar':'info','descuento de nómina':'','descuento nómina':'',programado:'info',estimado:''}; return `<span class="tag ${m[e]??''}">${esc(e||'')}</span>`; }
+function estadoTag(e){ const m={pagado:'pos',pendiente:'warn',vencido:'neg','por confirmar':'info','sin confirmar':'info','descuento de nómina':'','descuento nómina':'',programado:'info',estimado:'','en curso':'info',superado:'neg',previsto:'',cerrado:''}; return `<span class="tag ${m[e]??''}">${esc(e||'')}</span>`; }
+function tcDesglose(d){
+  const g=d.desglose_minimo||{}; const filas=[['Compras del periodo (las de 1 cuota completas + 1.ª cuota de las diferidas)',g.compras_del_periodo],
+    ['Cuotas de compras anteriores',g.cuotas_compras_anteriores],['Intereses del periodo',g.intereses],['Cuota de avances',g.cuota_avances],['Seguro y comisiones',g.otros_cargos]];
+  const vig=(d.cuotas_vigentes||[]).filter(c=>c.pendiente>0).sort((a,b)=>b.pendiente-a.pendiente);
+  return `<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600;font-size:14px">Así se compone el pago mínimo de ${fmt(d.pago_minimo)}</summary>
+    <table class="t" style="margin-top:6px">${filas.filter(f=>f[1]!=null).map(([l,v])=>`<tr><td>${esc(l)}</td><td class="r num" style="white-space:nowrap">${fmt(v)}</td></tr>`).join('')}</table>
+    ${vig.length?`<div class="sub" style="margin-top:8px">Compras a cuotas que siguen</div><table class="t">${vig.map(c=>`<tr><td>${esc(c.descripcion)}<div class="sub">cuota ${c.cuota} de ${c.de}</div></td><td class="r num" style="white-space:nowrap">${fmt(c.cuota_mes)}<div class="sub">debes ${fmt(c.pendiente)}</div></td></tr>`).join('')}</table>`:''}
+    ${(d.terminan_este_mes||[]).length?`<div class="note">Terminan con este pago: ${d.terminan_este_mes.map(c=>esc(c.descripcion)+' ('+fmt(c.cuota_mes)+')').join(', ')}.</div>`:''}
+    ${d.proximo_minimo_estimado?`<div class="note">Próximo mes, sin contar compras nuevas, el mínimo rondaría ${fmt(d.proximo_minimo_estimado)}: cuotas que siguen ${fmt(d.cuotas_que_siguen)} + intereses y seguro.</div>`:''}
+  </details>`;
+}
 function debtCard(d){
   const t=tasaEA(d); const uso=d.uso_cupo_pct;
   const hist=(d.historia||[]).filter(h=>h.saldo);
@@ -482,7 +508,9 @@ function debtCard(d){
       ${d.pago_minimo_alterno?`<div><span>Pago mínimo alterno</span><b class="num">${fmt(d.pago_minimo_alterno)}</b></div>`:''}
       ${d.capital_mes?`<div><span>Abono a capital</span><b class="num">${fmt(d.capital_mes)}</b></div>`:''}
     </div>
+    ${d.tipo==='tc'&&d.desglose_minimo?tcDesglose(d):''}
     ${d.tipo==='tc'&&d.pago_minimo&&d.saldo?`<div class="note">Pagar solo el mínimo deja ${fmt(d.saldo-d.pago_minimo)} generando intereses al ${t||'—'}% anual.</div>`:''}
+    ${d.nota_pago?`<div class="note">${esc(d.nota_pago)}</div>`:''}
     ${d.avances?.length?`<div class="note">Avances recientes: ${d.avances.slice(0,4).map(a=>fmt(a.monto)+' ('+fechaCorta(a.fecha)+')').join(', ')}.</div>`:''}
     ${spark}</div>`;
 }
@@ -490,23 +518,38 @@ function debtCard(d){
 /* ─────────── Pagos (calendario) ─────────── */
 function obRow(o){
   const [y,m,d]=o.fecha.split('-');
-  return `<div class="ob"><div class="date"><b>${+d}</b><span>${MES_C[+m-1]}</span></div><div style="min-width:0"><div class="t" style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(o.concepto)}</div>
-    <div class="sub">${estadoTag(o.estado)} ${esc(o.fuente||'')}${o.a_nombre_de?' · a nombre de '+esc(o.a_nombre_de):''}</div></div><div class="num" style="font-weight:600">${o.monto?fmt(o.monto):'—'}</div></div>`;
+  if (o.tipo==='variable'){
+    const pct=Math.min(100,100*(o.gastado||0)/(o.monto||1));
+    return `<div class="ob"><div class="date"><b>≈</b><span>ciclo</span></div><div style="min-width:0"><div class="t" style="font-weight:500">${esc(o.concepto)}</div>
+      <div class="meter ${o.estado==='superado'?'hot':''}" style="margin-top:6px"><div style="width:${pct.toFixed(0)}%"></div></div>
+      <div class="sub">Llevas ${fmt(o.gastado||0)}${o.n?` en ${o.n} pago(s)`:''} de ${fmt(o.monto)} previstos${o.nota?' · '+esc(o.nota):''}</div></div>
+      <div class="num" style="font-weight:600">${fmt(Math.max(0,(o.monto||0)-(o.gastado||0)))}<div class="sub" style="text-align:right">por gastar</div></div></div>`;
+  }
+  return `<div class="ob"><div class="date"><b>${+d}</b><span>${MES_C[+m-1]}</span></div><div style="min-width:0"><div class="t" style="font-weight:500;line-height:1.25">${esc(o.concepto)}</div>
+    <div class="sub">${estadoTag(o.estado)} ${esc(o.fuente||'')}${o.medio?' · '+esc(o.medio):''}</div></div><div class="num" style="font-weight:600">${o.monto?fmt(o.monto):'—'}</div></div>`;
 }
+const TIPO_OB = {deuda:'Deudas', fijo:'Gastos fijos', suscripcion:'Suscripciones', factura:'Facturas', impuesto:'Impuestos', variable:'Gastos variables (estimados)'};
 function vPagos(){
-  const ob=S.data.obligaciones||[]; const hoy=S.data.hoy;
-  const en7 = new Date(hoy+'T12:00'); en7.setDate(en7.getDate()+7); const s7=en7.toISOString().slice(0,10);
-  const grupos=[
-    ['Requieren atención', ob.filter(o=>['vencido','sin confirmar','por confirmar'].includes(o.estado))],
-    ['Próximos 7 días', ob.filter(o=>o.fecha>=hoy && o.fecha<=s7 && !['pagado','vencido','sin confirmar','por confirmar'].includes(o.estado))],
-    ['Más adelante', ob.filter(o=>o.fecha>s7 && !['pagado'].includes(o.estado))],
-    ['Pagados recientemente', ob.filter(o=>o.estado==='pagado').reverse()],
-  ];
-  const pend = ob.filter(o=>o.fecha>=hoy && o.fecha<=hoy.slice(0,8)+'31' && ['pendiente','programado','estimado'].includes(o.estado)).reduce((a,o)=>a+(o.monto||0),0);
-  return `<h1>Pagos y obligaciones</h1><div class="sub">De extractos, avisos de pago programado, facturas electrónicas y tus obligaciones fijas.</div>
-  <div class="card kpi" style="margin-top:12px"><div class="lab">Te falta pagar este mes</div><div class="val num">${fmt(pend)}</div></div>
-  ${grupos.map(([t,xs])=>xs.length?`<div class="card"><h2>${t}</h2>${xs.map(obRow).join('')}</div>`:'').join('')}
-  <div class="note">Las obligaciones fijas (cuota alimentaria, administración, servicios) se editan en <code>config/perfil.yaml</code>.</div>`;
+  const ob=S.data.obligaciones||[];
+  const ids=[...new Set(ob.map(o=>o.ciclo))].sort();
+  if(!ids.includes(S.pagosCiclo)) S.pagosCiclo = S.data.ciclo_actual;
+  const xs=ob.filter(o=>o.ciclo===S.pagosCiclo);
+  const fijos=xs.filter(o=>o.tipo!=='variable'), vars=xs.filter(o=>o.tipo==='variable');
+  const pendientes=fijos.filter(o=>!['pagado'].includes(o.estado));
+  const pagados=fijos.filter(o=>o.estado==='pagado');
+  const falta=pendientes.reduce((a,o)=>a+(o.monto||0),0) + vars.reduce((a,o)=>a+Math.max(0,(o.monto||0)-(o.gastado||0)),0);
+  const pagadoT=pagados.reduce((a,o)=>a+(o.monto||0),0);
+  const grupo=(t,arr)=>arr.length?`<div class="card"><h2>${t}</h2>${arr.map(obRow).join('')}</div>`:'';
+  const porTipo=arr=>Object.keys(TIPO_OB).map(k=>[TIPO_OB[k],arr.filter(o=>o.tipo===k)]).filter(([,a])=>a.length);
+  const c=ciclo(S.pagosCiclo);
+  return `<h1>Pagos del ciclo</h1><div class="sub">De nómina a nómina. Te pagan el 26 o el día siguiente.</div>
+  <div class="chips" style="margin:10px 0">${ids.map(id=>`<button class="chip ${id===S.pagosCiclo?'on':''}" data-pciclo="${id}">${esc(ciclo(id).etiqueta)}${id===S.data.ciclo_actual?' · actual':''}</button>`).join('')}</div>
+  <div class="grid g2"><div class="card kpi"><div class="lab">Te falta pagar</div><div class="val num">${fmt(falta)}</div><div class="foot">${esc(c.etiqueta)}</div></div>
+  <div class="card kpi"><div class="lab">Ya pagaste</div><div class="val num pos">${fmt(pagadoT)}</div><div class="foot">${pagados.length} de ${fijos.length} obligaciones</div></div></div>
+  ${porTipo(pendientes).map(([t,a])=>grupo(t+' · pendientes',a)).join('')}
+  ${grupo('Gastos variables (estimados)',vars)}
+  ${grupo('Pagados',pagados)}
+  <div class="note">Los fijos, suscripciones y variables se editan en <code>config/perfil.yaml</code>. Lo que pagas por cuenta de tu mamá no aparece aquí.</div>`;
 }
 
 /* ─────────── Más ─────────── */
@@ -523,13 +566,13 @@ function vMas(movs){
 const volver = `<button class="iconbtn" data-sub="" style="margin:6px 0">‹ Más</button>`;
 function vEfectivo(movs){
   const r = resumenMes(movs,S.mes);
-  const xs = movs.filter(m=>m.fecha.startsWith(S.mes) && (m.medio==='Efectivo'||m.clase==='retiro'));
+  const xs = movs.filter(m=>enCiclo(m.fecha,S.mes) && (m.medio==='Efectivo'||m.clase==='retiro'));
   return `${volver}<h1>Efectivo</h1>${monthbar()}
   <div class="grid g2"><div class="card kpi"><div class="lab">Retiraste</div><div class="val num">${fmt(r.retiros)}</div></div>
   <div class="card kpi"><div class="lab">Registrado</div><div class="val num">${fmt(r.efectivo)}</div><div class="foot">${r.sinDetallar?'<span class="warn">Falta detallar '+fmt(r.sinDetallar)+'</span>':'Todo detallado'}</div></div></div>
   <button class="btn" id="btnEf">Registrar gasto en efectivo</button>
   <button class="btn sec" id="btnIng">Registrar un ingreso</button>
-  <div class="card list" style="margin-top:12px">${xs.length?xs.map(movRow).join(''):'<div class="empty">Sin movimientos en efectivo este mes.</div>'}</div>
+  <div class="card list" style="margin-top:12px">${xs.length?xs.map(movRow).join(''):'<div class="empty">Sin movimientos en efectivo en este ciclo.</div>'}</div>
   <div class="note">Las facturas electrónicas pagadas en efectivo se registran solas. Los gastos que escribas aquí se guardan en tu repositorio (<code>data/manual/movimientos.json</code>).</div>`;
 }
 function vExtractos(){
@@ -552,8 +595,8 @@ function vFacturas(){
 }
 function vCalidad(){
   const c=S.data.calidad||{}; const ms=Object.keys(c).sort().reverse();
-  return `${volver}<h1>Calidad de datos</h1><div class="sub">Por mes: cuánto de lo que gastaste y pagaste se conoce por aviso del banco, por extracto o por factura. Lo que solo aparece en extracto es lo que el correo diario anterior nunca contaba.</div>
-  ${ms.map(m=>`<div class="card"><h2>${mesNombre(m)} <span class="sub">· ${fmt(c[m].total)}</span></h2>${coberturaHTML(c[m])}</div>`).join('')}`;
+  return `${volver}<h1>Calidad de datos</h1><div class="sub">Por ciclo de nómina: cuánto de lo que gastaste y pagaste se conoce por aviso del banco, por extracto o por factura. Lo que solo aparece en extracto es lo que el correo diario anterior nunca contaba.</div>
+  ${ms.map(m=>`<div class="card"><h2>${esc(ciclo(m).etiqueta)} <span class="sub">· ${fmt(c[m].total)}</span></h2>${coberturaHTML(c[m])}</div>`).join('')}`;
 }
 function vConexion(){
   const c=S.cfg||{};
@@ -568,11 +611,13 @@ function vConexion(){
 /* ═══════════════════ Interacción ═══════════════════ */
 function wire(movs){
   document.querySelectorAll('[data-mes]').forEach(b=>b.onclick=()=>{ if(b.dataset.mes){ S.mes=b.dataset.mes; render(); } });
+  document.querySelectorAll('[data-pciclo]').forEach(b=>b.onclick=()=>{ S.pagosCiclo=b.dataset.pciclo; render(); });
   document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ S.filtro=b.dataset.f; render(); });
   document.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{ S.cat=b.dataset.cat==='Efectivo sin detallar'?null:b.dataset.cat; S.filtro='todos'; S.tab='movs'; render(); scrollTo(0,0); });
   document.querySelectorAll('[data-clearcat]').forEach(b=>b.onclick=()=>{ S.cat=null; render(); });
   document.querySelectorAll('[data-sub]').forEach(b=>b.onclick=()=>{ S.sub=b.dataset.sub||null; render(); scrollTo(0,0); });
   document.querySelectorAll('[data-go]').forEach(b=>b.onclick=e=>{ e.preventDefault(); S.tab='mas'; S.sub=b.dataset.go; render(); });
+  document.querySelectorAll('[data-filtro]').forEach(b=>b.onclick=e=>{ e.preventDefault(); S.filtro=b.dataset.filtro; S.tab='movs'; render(); scrollTo(0,0); });
   document.querySelectorAll('[data-go-tab]').forEach(b=>b.onclick=()=>{ S.tab=b.dataset.goTab; render(); scrollTo(0,0); });
   document.querySelectorAll('[data-mov]').forEach(b=>b.onclick=()=>abrirMov(movs.find(m=>m.id===b.dataset.mov)));
   document.querySelectorAll('[data-fac]').forEach(b=>b.onclick=()=>abrirFactura((S.data.facturas||[]).find(f=>f.id===b.dataset.fac)));
@@ -594,7 +639,7 @@ function abrirMov(m){
   if(!m) return;
   const f = m.factura ? (S.data.facturas||[]).find(x=>x.id===m.factura) : null;
   const fu = (m.fuentes||[]).map(s=>({davibank_tarjeta:'Aviso de compra Davibank',davibank_online:'Aviso de banca online',davibank_debito_auto:'Aviso de pago automático',pse:'Comprobante PSE',compensar_avance:'Aviso de Compensar',extracto_ahorros:'Extracto de ahorros',extracto_tc:'Extracto de tarjeta',factura:'Factura electrónica',manual:'Registro manual',desprendible:'Desprendible de nómina'}[s]||s));
-  const clases=[['consumo','Gasto'],['ingreso','Ingreso'],['deuda','Pago a deuda'],['credito','Plata prestada (avance)'],['ahorro','Ahorro/inversión'],['retiro','Retiro de efectivo'],['interno','Entre mis cuentas (no contar)']];
+  const clases=[['tercero','Por cuenta de otra persona (no contar)'],['consumo','Gasto'],['ingreso','Ingreso'],['deuda','Pago a deuda'],['credito','Plata prestada (avance)'],['ahorro','Ahorro/inversión'],['retiro','Retiro de efectivo'],['interno','Entre mis cuentas (no contar)']];
   abrirSheet(`<div class="sub">${fechaLarga(m.fecha)}${m.hora?' · '+esc(m.hora):''}</div><h2 style="font-size:19px;margin:4px 0">${esc(m.contraparte)}</h2>
    <div class="num ${m.dir==='in'?'pos':''}" style="font-size:26px;font-weight:700">${m.dir==='in'?'+':'−'}${fmt(m.monto)}</div>
    <div class="kv"><span>Medio</span><b>${esc(m.medio||'—')}</b>${m.cuenta?`<span>Cuenta</span><b>${esc(m.cuenta)}</b>`:''}${m.cuotas?`<span>Cuotas</span><b>${esc(m.cuotas)}</b>`:''}
@@ -648,7 +693,7 @@ function abrirEfectivo(tipo='gasto'){
       medio: medioSel.startsWith('Bre-B')?'Bre-B':medioSel, creado:new Date().toISOString()};
     $('#eGuardar').disabled=true;
     try{ await guardarManual(xs=>[...xs,e], `${ing?'Ingreso':'Gasto en efectivo'}: ${e.descripcion||e.categoria} ${monto}`);
-      cerrarSheet(); S.mes=e.fecha.slice(0,7); render(); toast('Guardado en tu repositorio'); }
+      cerrarSheet(); S.mes=cicloDe(e.fecha); render(); toast('Guardado en tu repositorio'); }
     catch(err){ $('#eGuardar').disabled=false; toast(err.message,5000); }
   };
 }
