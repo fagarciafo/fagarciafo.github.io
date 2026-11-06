@@ -210,670 +210,24 @@ table.t td.r,table.t th.r{text-align:right}
 </head>
 <body>
 <div class="app" id="app"></div>
-<div class="sheet-bg" id="sheetBg"></div>
-<div class="sheet" id="sheet"><div class="grab"></div><div id="sheetBody"></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
-/* ═══════════════════ Utilidades ═══════════════════ */
+/* Pantalla de entrada. La app completa vive en el repositorio privado (app/index.html)
+   y solo se descarga después de desbloquear el token con la clave o con Face ID. */
+(function(){
+'use strict';
 const $ = (s, el=document) => el.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const COP = new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0});
-const fmt = v => COP.format(Math.round(v||0)).replace(/\s/g,' ');
-const fmtS = v => { const a=Math.abs(v||0), s=v<0?'−':''; if(a>=1e6) return s+'$'+(a/1e6).toLocaleString('es-CO',{maximumFractionDigits:a>=1e7?1:2})+' M'; if(a>=1e3) return s+'$'+Math.round(a/1e3)+' mil'; return s+'$'+Math.round(a); };
-const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-const MES_C = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-const mesNombre = ym => { const [y,m]=ym.split('-'); return MESES[+m-1]+' '+y; };
-const fechaLarga = d => { const x=new Date(d+'T12:00'); return x.toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long'}); };
-const fechaCorta = d => { if(!d) return '—'; const [y,m,dd]=d.split('-'); return `${+dd} ${MES_C[+m-1]}`; };
-const hoyISO = () => { const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
-const uid = () => 'm'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const store = { get(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }, set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} } };
 function toast(msg, ms=2600){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),ms); }
-const b64 = s => btoa(unescape(encodeURIComponent(s)));
-const unb64 = s => decodeURIComponent(escape(atob(s.replace(/\n/g,''))));
-
 const ICON = {
-  home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>',
-  list:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
-  debt:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20M6 15h4"/></svg>',
-  cal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>',
-  more:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>',
-  plus:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
-  cash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>',
-  card:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/></svg>',
-  bank:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-6 9 6M5 10v8M19 10v8M9 10v8M15 10v8M3 20h18"/></svg>',
-  arrow:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg>',
-  in:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7L7 17M15 17H7V9"/></svg>',
-  bolt:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h8l-1 8 10-12h-8z"/></svg>',
-  doc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>',
-  lock:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>',
+  logo:'<svg viewBox="0 0 24 24" fill="none" stroke="#b8f2d0" stroke-width="3" stroke-linecap="round"><path d="M6 17V9m6 8v-6m6 6V5"/></svg>',
   cara:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 8V5a2 2 0 012-2h3M16 3h3a2 2 0 012 2v3M21 16v3a2 2 0 01-2 2h-3M8 21H5a2 2 0 01-2-2v-3"/><path d="M9 9v1.5M15 9v1.5M12 9v4h-1M9 16c1.6 1.3 4.4 1.3 6 0"/></svg>',
   borrar:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 5h11a1 1 0 011 1v12a1 1 0 01-1 1H9l-6-7z"/><path d="M12 9l6 6M18 9l-6 6"/></svg>',
-  refresh:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 11-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>',
-  logo:'<svg viewBox="0 0 24 24" fill="none" stroke="#b8f2d0" stroke-width="3" stroke-linecap="round"><path d="M6 17V9m6 8v-6m6 6V5"/></svg>',
 };
-const iconoMedio = m => ({'Efectivo':ICON.cash,'Tarjeta de crédito':ICON.card,'Débito automático':ICON.bolt,'Bre-B':ICON.arrow,'PSE':ICON.bank,'Transferencia':ICON.arrow}[m.medio] || (m.dir==='in'?ICON.in:ICON.card));
+const S = { cfg: store.get('fin.cfg', null) };
 
-/* ═══════════════════ Estado y GitHub ═══════════════════ */
-const S = { cfg: store.get('fin.cfg', null), data:null, manual:[], manualSha:null, ajustes:{movimientos:{},reglas:[]}, ajustesSha:null,
-  tab: store.get('fin.tab','inicio'), mes:null, filtro:'todos', q:'', demo:false, sub:null };
-
-const GH = {
-  base(){ return `https://api.github.com/repos/${S.cfg.owner}/${S.cfg.repo}`; },
-  h(extra={}){ return {'Authorization':'Bearer '+S.cfg.token,'X-GitHub-Api-Version':'2022-11-28',...extra}; },
-  async raw(path){ const r=await fetch(`${this.base()}/contents/${path}?ref=${S.cfg.branch||'main'}&t=${Date.now()}`,{headers:this.h({'Accept':'application/vnd.github.raw+json'})});
-    if(r.status===404) return null; if(!r.ok) throw new Error(`GitHub ${r.status} al leer ${path}`); return r.text(); },
-  async json(path){ const r=await fetch(`${this.base()}/contents/${path}?ref=${S.cfg.branch||'main'}&t=${Date.now()}`,{cache:'no-store',headers:this.h({'Accept':'application/vnd.github+json'})});
-    if(r.status===404) return {data:null,sha:null}; if(!r.ok) throw new Error(`GitHub ${r.status} al leer ${path}`);
-    const j=await r.json(); return {data: JSON.parse(unb64(j.content)), sha:j.sha}; },
-  async put(path, contentB64, sha, message){ const body={message, content:contentB64, branch:S.cfg.branch||'main'}; if(sha) body.sha=sha;
-    const r=await fetch(`${this.base()}/contents/${path}`,{method:'PUT',headers:this.h({'Accept':'application/vnd.github+json'}),body:JSON.stringify(body)});
-    if(!r.ok){ const t=await r.text(); throw new Error(`GitHub ${r.status}: ${t.slice(0,140)}`); } return (await r.json()).content.sha; },
-  async dispatch(){ const r=await fetch(`${this.base()}/actions/workflows/actualizar.yml/dispatches`,{method:'POST',headers:this.h({'Accept':'application/vnd.github+json'}),body:JSON.stringify({ref:S.cfg.branch||'main'})});
-    if(!r.ok) throw new Error(`No pude lanzar la actualización (${r.status}). Revisa que el token tenga permiso de Actions.`); },
-};
-
-async function cargar(){
-  if (window.FIN_DEMO){ S.demo=true; S.data=window.FIN_DEMO; S.manual=window.FIN_DEMO_MANUAL||[]; return; }
-  const txt = await GH.raw('data/finanzas.json');
-  if(!txt) throw new Error('No encontré data/finanzas.json en el repositorio. Ejecuta el flujo "Actualizar finanzas" una vez.');
-  S.data = JSON.parse(txt);
-  const [man, aj] = await Promise.all([GH.json('data/manual/movimientos.json'), GH.json('data/manual/ajustes.json')]);
-  S.manual = man.data||[]; S.manualSha = man.sha; S.ajustes = aj.data||{movimientos:{},reglas:[]}; S.ajustesSha = aj.sha;
-  S.ajustes.movimientos ||= {}; S.ajustes.reglas ||= [];
-}
-
-/* Mezcla lo manual que aún no procesó el flujo (aparece al instante) y aplica ajustes locales */
-function movimientos(){
-  const base = S.data.movimientos;
-  const ids = new Set(base.map(m=>m.id));
-  const conc = new Set(S.data.manuales_conciliados||[]);
-  const extra = S.manual.filter(e=>!e.borrado && !ids.has(e.id) && !conc.has(e.id)).map(e=>({
-    id:e.id, fecha:e.fecha, monto:+e.monto, dir:e.tipo==='ingreso'?'in':'out', medio:e.medio||'Efectivo',
-    contraparte:e.descripcion||(e.tipo==='ingreso'?'Ingreso':'Gasto en efectivo'), descripcion:e.descripcion||'',
-    clase:e.tipo==='ingreso'?'ingreso':'consumo', categoria:e.categoria||'Otros', fuentes:['manual'], manual:true, pendiente:true }));
-  const borrados = new Set(S.manual.filter(e=>e.borrado).map(e=>e.id));
-  const reglas = (S.ajustes.reglas||[]).map(r=>{ try{ return [new RegExp(r.patron,'i'), r]; }catch(e){ return null; } }).filter(Boolean);
-  return [...extra, ...base].filter(m=>!borrados.has(m.id)).map(m=>{
-    const o = S.ajustes.movimientos?.[m.id];
-    let x = m;
-    if (o){ x = {...m, ...(o.categoria?{categoria:o.categoria}:{}), ...(o.clase?{clase:o.clase}:{}), ...(o.nota?{nota:o.nota}:{}), ajustado:true}; if(o.ignorar) x.clase='interno'; }
-    else if (reglas.length && !m.manual){ const txt=norm([m.contraparte,m.descripcion,m.detalle,m.emisor].join(' ')); for(const [rx,r] of reglas){ if(rx.test(txt)){ x={...m,categoria:r.categoria,clase:r.clase||m.clase}; break; } } }
-    return x;
-  }).sort((a,b)=> (b.fecha+(b.hora||'')).localeCompare(a.fecha+(a.hora||'')));
-}
-const norm = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9*/&.\- ]+/g,' ').replace(/\s+/g,' ').trim();
-
-/* ═══════════════════ Cálculos del mes ═══════════════════ */
-/* Ciclos de pago: de nómina a nómina (26 o el día siguiente). El id es el mes en que termina. */
-function ciclos(){ return S.data.ciclos||[]; }
-function ciclo(id){ return ciclos().find(c=>c.id===id) || {id, inicio:id+'-01', fin:id+'-31', etiqueta:mesNombre(id)}; }
-function enCiclo(fecha, id){ const c=ciclo(id); return fecha>=c.inicio && fecha<=c.fin; }
-function cicloDe(fecha){ const c=ciclos().find(c=>fecha>=c.inicio && fecha<=c.fin); return c?c.id:fecha.slice(0,7); }
-function resumenMes(movs, mes){
-  const r = {ingresos:0, consumo:0, consumoTC:0, efectivo:0, retiros:0, deudas:0, ahorro:0, avances:0, costos:0, porCat:{}, n:0, extra:0, porClasificar:0, nPorClasificar:0, terPag:0, terReem:0};
-  const c = ciclo(mes);
-  for (const m of movs){
-    if (m.fecha<c.inicio || m.fecha>c.fin) continue;
-    r.n++;
-    if (m.clase==='tercero'){ if(m.dir==='out') r.terPag+=m.monto; else r.terReem+=m.monto; continue; }
-    if (m.clase==='ingreso') r.ingresos+=m.monto;
-    else if (m.clase==='consumo' && m.dir==='out'){
-      r.consumo+=m.monto; r.porCat[m.categoria]=(r.porCat[m.categoria]||0)+m.monto;
-      if (m.medio==='Tarjeta de crédito') r.consumoTC+=m.monto;
-      if (m.medio==='Efectivo') r.efectivo+=m.monto;
-      if (m.extraordinario) r.extra+=m.monto;
-      if (m.categoria==='Por clasificar'){ r.porClasificar+=m.monto; r.nPorClasificar++; }
-    }
-    else if (m.clase==='retiro') r.retiros+=m.monto;
-    else if (m.clase==='deuda') r.deudas+=m.monto;
-    else if (m.clase==='ahorro') r.ahorro+=m.monto;
-    else if (m.clase==='credito') r.avances+=m.monto;
-    else if (m.clase==='costo_financiero') r.costos+= m.dir==='out'? m.monto : -m.monto;
-  }
-  r.sinDetallar = Math.max(0, r.retiros - r.efectivo);
-  if (r.sinDetallar>0){ r.porCat['Efectivo sin detallar']=r.sinDetallar; }
-  r.gastoTotal = r.consumo + r.sinDetallar;
-  r.salidas = (r.consumo - r.consumoTC - r.efectivo) + r.retiros + r.deudas + r.ahorro;
-  r.balance = r.ingresos - r.salidas;
-  return r;
-}
-
-/* ═══════════════════ Render principal ═══════════════════ */
-const TABS = [['inicio','Inicio',ICON.home],['movs','Movimientos',ICON.list],['deudas','Deudas',ICON.debt],['pagos','Pagos',ICON.cal],['mas','Más',ICON.more]];
-function shell(inner){
-  const d=S.data; const gen = d?.generado ? new Date(d.generado) : null;
-  return `<header class="top"><div class="brand"><div class="logo">${ICON.logo}</div><span>Mis finanzas</span></div><div class="sp"></div>
-    <div class="upd">${S.demo?'<span class="tag warn">vista previa</span><br>':''}${gen?'Actualizado<br>'+gen.toLocaleString('es-CO',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}):''}</div>
-    ${S.cfg?.seg?`<button class="iconbtn" id="btnLock" title="Bloquear" aria-label="Bloquear">${ICON.lock}</button>`:''}<button class="iconbtn" id="btnUpd" title="Actualizar ahora">${ICON.refresh}</button></header>
-    <nav class="tabs">${TABS.map(([k,l,i])=>`<button data-tab="${k}" class="${S.tab===k?'on':''}">${i}<span>${l}</span></button>`).join('')}</nav>
-    <main>${inner}</main>
-    <button class="fab" id="fab">${ICON.plus}<span>Efectivo</span></button>`;
-}
-function render(){
-  if (!S.data || S.bloqueado){ return; }
-  const movs = movimientos();
-  if (!S.mes || !ciclos().some(c=>c.id===S.mes)) S.mes = S.data.ciclo_actual || (ciclos()[0]||{}).id || hoyISO().slice(0,7);
-  const v = {inicio:vInicio, movs:vMovs, deudas:vDeudas, pagos:vPagos, mas:vMas}[S.tab] || vInicio;
-  $('#app').innerHTML = shell(v(movs));
-  document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ S.tab=b.dataset.tab; S.sub=null; store.set('fin.tab',S.tab); render(); scrollTo(0,0); });
-  $('#fab').onclick = ()=>abrirEfectivo();
-  $('#btnUpd').onclick = actualizarAhora;
-  if ($('#btnLock')) $('#btnLock').onclick = bloquear;
-  wire(movs);
-}
-function monthbar(){
-  const ms = ciclos().map(c=>c.id); const i = ms.indexOf(S.mes); const c = ciclo(S.mes);
-  const act = S.mes===S.data.ciclo_actual;
-  return `<div class="monthbar"><button class="iconbtn" data-mes="${ms[i+1]||''}" ${i>=ms.length-1?'disabled':''} aria-label="Ciclo anterior">‹</button>
-    <div class="m">${esc(c.etiqueta)}<div class="sub" style="font-weight:400">${act?'ciclo actual':'ciclo de nómina'}</div></div>
-    <button class="iconbtn" data-mes="${ms[i-1]||''}" ${i<=0?'disabled':''} aria-label="Ciclo siguiente">›</button></div>`;
-}
-
-/* ─────────── Inicio ─────────── */
-function vInicio(movs){
-  const r = resumenMes(movs, S.mes);
-  const pres = S.data.presupuesto||{};
-  const porPagar = {};
-  if (S.mes===S.data.ciclo_actual) for (const o of obVivas()){
-    if (o.ciclo!==S.mes || !o.categoria || o.tipo==='variable' || o.estado==='pagado' || !o.monto) continue;
-    const x = porPagar[o.categoria] ||= {v:0, items:[]}; x.v += o.monto; x.items.push(`${o.concepto} ${fechaCorta(o.fecha)}`); }
-  const nombres = new Set([...Object.keys(r.porCat), ...Object.keys(pres), ...Object.keys(porPagar)]);
-  const cats = [...nombres].map(c=>[c, r.porCat[c]||0]).sort((a,b)=>(b[1]-a[1]) || ((pres[b[0]]||0)-(pres[a[0]]||0)));
-  const maxV = Math.max(1, ...cats.map(([c,v])=>Math.max(v+(porPagar[c]?.v||0), pres[c]||0)));
-  const pm = S.ajustes.pagos_marcados||{};
-  const alertas = (S.data.alertas||[]).filter(a=>!(a.clave && pm[a.clave]));
-  const prox = obVivas().filter(o=>o.ciclo===S.data.ciclo_actual && o.tipo!=='variable' && !['pagado'].includes(o.estado)).slice(0,7);
-  const cal = S.data.calidad?.[S.mes];
-  const deudaTotal = (S.data.deudas||[]).reduce((a,d)=>a+(d.saldo||0),0);
-  return `${monthbar()}
-  <div class="grid g4">
-    <div class="card kpi"><div class="lab">Entró</div><div class="val num pos">${fmtS(r.ingresos)}</div><div class="foot">${r.avances?`+ ${fmtS(r.avances)} prestados (avances)`:'Ingresos del ciclo'}</div></div>
-    <div class="card kpi"><div class="lab">Salió de tu bolsillo</div><div class="val num">${fmtS(r.salidas)}</div><div class="foot">Gastos de contado, deudas y retiros</div></div>
-    <div class="card kpi"><div class="lab">Balance</div><div class="val num ${r.balance<0?'neg':'pos'}">${fmtS(r.balance)}</div><div class="foot">${r.balance<0?'Gastaste más de lo que entró':'Te quedó disponible'}</div></div>
-    <div class="card kpi"><div class="lab">Compras con tarjeta</div><div class="val num warn">${fmtS(r.consumoTC)}</div><div class="foot">Se vuelven deuda · total deudas ${fmtS(deudaTotal)}</div></div>
-  </div>
-  <div class="cols" style="margin-top:12px">
-    <div>
-      <div class="card"><h2>En qué se te va la plata <span class="sub">· ${fmt(r.gastoTotal)}</span></h2>
-        ${cats.length? `<div class="bars">${cats.map(([c,v])=>{ const p=pres[c]; const over=p&&v>p;
-          const pp=porPagar[c];
-          return `<div class="row ${v?'':'cero'}" data-cat="${esc(c)}"><div class="n">${esc(c)}</div><div class="v num">${fmt(v)}</div>
-          <div class="track"><div class="fill ${over?'over':''}" style="width:${(100*v/maxV).toFixed(1)}%"></div>${pp?`<div class="fill prev" style="left:${(100*v/maxV).toFixed(1)}%;width:${(100*pp.v/maxV).toFixed(1)}%"></div>`:''}${p?`<div class="budget" style="left:${(100*p/maxV).toFixed(1)}%"></div>`:''}</div>
-          <div class="meta">${p?`Presupuesto ${fmt(p)} · ${over?'<span class="neg">te pasaste '+fmt(v-p)+'</span>':'quedan '+fmt(p-v)}`:(v?'':'Sin gastos en este ciclo')}${pp?`${p||!v?'<br>':''}Por pagar ${fmt(pp.v)}: ${esc(pp.items.join(', '))}`:''}</div></div>`; }).join('')}</div>`
-          : '<div class="empty">Sin gastos registrados en este ciclo.</div>'}
-        ${r.extra?`<div class="note">Incluye ${fmt(r.extra)} en compras grandes (más de $1 millón). Sin ellas, el gasto del ciclo fue ${fmt(r.gastoTotal-r.extra)}.</div>`:''}
-        ${(r.terPag||r.terReem)?`<div class="note">No se cuenta como gasto ni ingreso: pagaste ${fmt(r.terPag)} por cuenta de otra persona y te reembolsaron ${fmt(r.terReem)}. <a href="#" data-filtro="tercero">Ver</a></div>`:''}
-        ${r.sinDetallar?`<div class="note">Retiraste ${fmt(r.retiros)} en efectivo y registraste ${fmt(r.efectivo)}. <a href="#" data-go="efectivo">Toca el retiro y di en qué se fue</a>.</div>`:''}
-      </div>
-      <div class="card chart"><h2>Últimos ciclos</h2>${grafMeses(movs)}</div>
-    </div>
-    <div>
-      <div class="card"><h2>Avisos</h2>${alertas.length? alertas.map(a=>`<div class="alert"><div class="dot ${a.nivel}"></div><div><b>${esc(a.titulo)}</b>${a.fecha?` <span class="tag">${fechaCorta(a.fecha)}</span>`:''}<div class="d">${esc(a.detalle||'')}</div></div></div>`).join('') : '<div class="empty">Todo en orden.</div>'}</div>
-      <div class="card"><h2>Pendientes del ciclo <span class="sub">· ${esc(ciclo(S.data.ciclo_actual).etiqueta)}</span></h2>${prox.length? prox.map(obRow).join('') : '<div class="empty">Todo pagado en este ciclo.</div>'}
-        <button class="btn sec" data-go-tab="pagos">Ver calendario</button></div>
-      ${cal?`<div class="card"><h2>¿De dónde salen estos datos?</h2>${coberturaHTML(cal)}</div>`:''}
-    </div>
-  </div>`;
-}
-function grafMeses(movs){
-  const ms = ciclos().filter(c=>c.inicio<=S.data.hoy).slice(0,7).map(c=>c.id).reverse();
-  if(!ms.length) return '<div class="empty">Sin datos.</div>';
-  const rs = ms.map(m=>({m, ...resumenMes(movs,m)}));
-  const max = Math.max(1,...rs.map(r=>Math.max(r.ingresos,r.gastoTotal)));
-  const W=640,H=200,pad=28,bw=(W-pad)/ms.length;
-  const y=v=>H-22-(H-40)*v/max;
-  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Ingresos y gastos por mes">`;
-  [0.5,1].forEach(f=>{ s+=`<line x1="${pad}" x2="${W}" y1="${y(max*f)}" y2="${y(max*f)}" stroke="var(--border)"/><text x="0" y="${y(max*f)+4}" font-size="10" fill="var(--faint)">${fmtS(max*f).replace('$','')}</text>`; });
-  rs.forEach((r,i)=>{ const x=pad+i*bw+bw*0.18, w=bw*0.3;
-    s+=`<rect x="${x}" y="${y(r.ingresos)}" width="${w}" height="${H-22-y(r.ingresos)}" rx="3" fill="var(--c1)"><title>Ingresos ${fmt(r.ingresos)}</title></rect>`;
-    s+=`<rect x="${x+w+3}" y="${y(r.gastoTotal)}" width="${w}" height="${H-22-y(r.gastoTotal)}" rx="3" fill="var(--c3)"><title>Gastos ${fmt(r.gastoTotal)}</title></rect>`;
-    s+=`<text x="${x+w}" y="${H-6}" font-size="11" text-anchor="middle" fill="var(--muted)" ${r.m===S.mes?'font-weight="700"':''}>${esc(ciclo(r.m).etiqueta.split('–')[1]||'').trim()}</text>`; });
-  return s+`</svg><div class="legend"><span><i style="background:var(--c1)"></i>Ingresos</span><span><i style="background:var(--c3)"></i>Gastos (consumo, incluye tarjeta)</span></div><div class="sub" style="margin-top:4px">Cada barra es un ciclo de nómina; la etiqueta es el día en que termina.</div>`;
-}
-function coberturaHTML(c){
-  const parts=[['notificado_y_confirmado','Avisado y confirmado en extracto','var(--c1)'],['solo_notificacion','Solo aviso del banco','var(--c2)'],['solo_extracto','Solo en el extracto (sin aviso)','var(--c3)'],['solo_factura','Solo factura electrónica','var(--c4)'],['manual','Registrado a mano','var(--c6)']];
-  const tot=c.total||1;
-  const sinAviso=(c.solo_extracto||0)+(c.solo_factura||0);
-  return `<div class="stack">${parts.map(([k,,col])=>c[k]?`<div style="width:${100*c[k]/tot}%;background:${col}" title="${k}"></div>`:'').join('')}</div>
-  <div class="legend" style="flex-direction:column;gap:4px">${parts.filter(([k])=>c[k]).map(([k,l,col])=>`<span><i style="background:${col}"></i>${l}: <b class="num">${fmt(c[k])}</b> (${c['n_'+k]||0})</span>`).join('')}</div>
-  ${sinAviso?`<div class="note">${fmt(sinAviso)} de este mes no llegó como aviso por correo: el resumen diario anterior nunca lo habría contado.</div>`:''}`;
-}
-
-/* ─────────── Movimientos ─────────── */
-const FILTROS = [['todos','Todos'],['consumo','Gastos'],['ingreso','Ingresos'],['deuda','Pagos a deudas'],['efectivo','Efectivo'],['clasificar','Por clasificar'],['sinaviso','Sin aviso del banco'],['tercero','Por cuenta de otros'],['otros','Avances y otros']];
-function vMovs(movs){
-  let xs = movs.filter(m=>enCiclo(m.fecha, S.mes));
-  const f=S.filtro;
-  xs = xs.filter(m=> f==='todos' ? true : f==='efectivo' ? (m.medio==='Efectivo'||m.clase==='retiro') : f==='clasificar' ? m.categoria==='Por clasificar' :
-     f==='sinaviso' ? (m.fuentes||[]).every(s=>!['davibank_tarjeta','davibank_online','davibank_debito_auto','pse','compensar_avance'].includes(s)) && !m.manual :
-     f==='otros' ? ['credito','ahorro','interno','costo_financiero','retiro'].includes(m.clase) : m.clase===f);
-  if (f!=='tercero' && f!=='todos') xs = xs.filter(m=>m.clase!=='tercero');
-  if (S.cat) xs = xs.filter(m=>m.categoria===S.cat);
-  if (S.q){ const q=norm(S.q); xs = xs.filter(m=>norm([m.contraparte,m.descripcion,m.detalle,m.categoria,m.emisor,String(m.monto)].join(' ')).includes(q)); }
-  const tot = xs.filter(m=>!['tercero','interno'].includes(m.clase)).reduce((a,m)=>a+(m.dir==='in'?m.monto:-m.monto),0);
-  let html = `${monthbar()}<input class="search" id="q" placeholder="Buscar comercio, categoría o valor" value="${esc(S.q)}">
-  <div class="chips">${FILTROS.map(([k,l])=>`<button class="chip ${S.filtro===k?'on':''}" data-f="${k}">${l}</button>`).join('')}</div>
-  ${S.cat?`<div style="margin:8px 0"><span class="chip on" data-clearcat>${esc(S.cat)} ✕</span></div>`:''}
-  <div class="sub" style="margin:8px 0">${xs.length} movimientos · neto <b class="num ${tot<0?'neg':'pos'}">${fmt(tot)}</b></div><div class="card list">`;
-  let dia='';
-  if(!xs.length) html+='<div class="empty">No hay movimientos con ese filtro.</div>';
-  for (const m of xs.slice(0,600)){
-    if (m.fecha!==dia){ if(dia) html+='</div><div class="card list">'; dia=m.fecha; html+=`<div class="day">${fechaLarga(m.fecha)}</div>`; }
-    html+=movRow(m);
-  }
-  return html+'</div>';
-}
-function fuentesBadges(m){
-  const f=new Set(m.fuentes||[]); const b=[];
-  if([...f].some(s=>['davibank_tarjeta','davibank_online','davibank_debito_auto','pse','compensar_avance'].includes(s))) b.push('<i class="n" title="Aviso del banco por correo">aviso</i>');
-  if(f.has('extracto_ahorros')||f.has('extracto_tc')) b.push('<i class="e" title="Confirmado en extracto">extracto</i>');
-  if(f.has('factura')) b.push('<i class="f" title="Factura electrónica">factura</i>');
-  if(f.has('manual')) b.push('<i class="m" title="Registrado a mano">manual</i>');
-  if(f.has('desprendible')) b.push('<i class="e">desprendible</i>');
-  return `<span class="src">${b.join('')}</span>`;
-}
-const CLASE_TXT = {consumo:'',ingreso:'Ingreso',deuda:'Pago a deuda',credito:'Plata prestada',ahorro:'Ahorro',retiro:'Retiro de efectivo',costo_financiero:'Intereses y cargos',interno:'Entre tus cuentas',tercero:'Por cuenta de otra persona'};
-function movRow(m){
-  const signo = m.dir==='in' ? '+' : '−';
-  const col = m.clase==='ingreso' ? 'pos' : (['interno'].includes(m.clase)?'':'');
-  return `<div class="it" data-mov="${esc(m.id)}"><div class="ico">${iconoMedio(m)}</div><div class="main">
-    <div class="t">${esc(m.contraparte)}</div><div class="s"><span class="ell">${esc(m.categoria||'')}${CLASE_TXT[m.clase]?' · '+CLASE_TXT[m.clase]:''} · ${esc(m.medio||'')}</span>${fuentesBadges(m)}</div></div>
-    <div class="amt num ${col}" style="${['interno','tercero'].includes(m.clase)?'opacity:.5':''}">${signo}${fmt(m.monto)}${m.cuotas&&m.cuotas!=='1/1'?`<small>cuota ${esc(m.cuotas)}</small>`:(m.hora?`<small>${esc(m.hora)}</small>`:'')}</div></div>`;
-}
-
-/* ─────────── Deudas ─────────── */
-function tasaEA(d){
-  if (d.tasa_ea) return d.tasa_ea;
-  if (d.intereses_mes && d.saldo){ const i=d.intereses_mes/(d.saldo-d.intereses_mes); return +(100*(Math.pow(1+i,12)-1)).toFixed(1); }
-  return null;
-}
-function vDeudas(){
-  const ds = S.data.deudas||[];
-  const total = ds.reduce((a,d)=>a+(d.saldo||0),0);
-  const cuotas = ds.reduce((a,d)=>a+(d.pago_minimo||d.cuota||0),0);
-  const intereses = ds.reduce((a,d)=>a+(d.intereses_mes||0),0);
-  const ing = (S.data.ingresos_config||[]).reduce((a,i)=>a+(i.neto_esperado||0),0);
-  const comultrasan = ds.find(d=>d.descuento_nomina);
-  const base = ing + (comultrasan?.cuota||0);
-  const orden = [...ds].sort((a,b)=>(tasaEA(b)||0)-(tasaEA(a)||0));
-  return `<h1>Deudas</h1><div class="sub">Se actualizan solas con cada extracto que llega a tu correo.</div>
-  <div class="grid g4" style="margin-top:12px">
-    <div class="card kpi"><div class="lab">Debes en total</div><div class="val num">${fmtS(total)}</div><div class="foot">${ds.length} obligaciones</div></div>
-    <div class="card kpi"><div class="lab">Cuotas del mes</div><div class="val num">${fmtS(cuotas)}</div><div class="foot">${base?Math.round(100*cuotas/base)+'% de tu salario':''}</div></div>
-    <div class="card kpi"><div class="lab">Intereses del mes</div><div class="val num neg">${fmtS(intereses)}</div><div class="foot">Lo que te cuesta deber</div></div>
-    <div class="card kpi"><div class="lab">Más cara</div><div class="val" style="font-size:17px">${esc(orden[0]?.nombre||'—')}</div><div class="foot">${tasaEA(orden[0]||{})?'≈ '+tasaEA(orden[0])+'% efectivo anual':''}</div></div>
-  </div>
-  <div class="note">Si te sobra plata para abonar, hazlo en este orden (de la más cara a la más barata): ${orden.map(d=>`<b>${esc(d.nombre)}</b>${tasaEA(d)?' ('+tasaEA(d)+'%)':''}`).join(' → ')}.</div>
-  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));margin-top:12px">${ds.map(debtCard).join('')}</div>`;
-}
-function estadoTag(e){ const m={pagado:'pos',pendiente:'warn',vencido:'neg','por confirmar':'info','sin confirmar':'info','descuento de nómina':'','descuento nómina':'',programado:'info',estimado:'','en curso':'info',superado:'neg',previsto:'',cerrado:''}; return `<span class="tag ${m[e]??''}">${esc(e||'')}</span>`; }
-function tcDesglose(d){
-  const g=d.desglose_minimo||{}; const filas=[['Compras del periodo (las de 1 cuota completas + 1.ª cuota de las diferidas)',g.compras_del_periodo],
-    ['Cuotas de compras anteriores',g.cuotas_compras_anteriores],['Intereses del periodo',g.intereses],['Cuota de avances',g.cuota_avances],['Seguro y comisiones',g.otros_cargos]];
-  const vig=(d.cuotas_vigentes||[]).filter(c=>c.pendiente>0).sort((a,b)=>b.pendiente-a.pendiente);
-  return `<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600;font-size:14px">Así se compone el pago mínimo de ${fmt(d.pago_minimo)}</summary>
-    <table class="t" style="margin-top:6px">${filas.filter(f=>f[1]!=null).map(([l,v])=>`<tr><td>${esc(l)}</td><td class="r num" style="white-space:nowrap">${fmt(v)}</td></tr>`).join('')}</table>
-    ${vig.length?`<div class="sub" style="margin-top:8px">Compras a cuotas que siguen</div><table class="t">${vig.map(c=>`<tr><td>${esc(c.descripcion)}<div class="sub">cuota ${c.cuota} de ${c.de}</div></td><td class="r num" style="white-space:nowrap">${fmt(c.cuota_mes)}<div class="sub">debes ${fmt(c.pendiente)}</div></td></tr>`).join('')}</table>`:''}
-    ${(d.terminan_este_mes||[]).length?`<div class="note">Terminan con este pago: ${d.terminan_este_mes.map(c=>esc(c.descripcion)+' ('+fmt(c.cuota_mes)+')').join(', ')}.</div>`:''}
-    ${d.proximo_minimo_estimado?`<div class="note">Próximo mes, sin contar compras nuevas, el mínimo rondaría ${fmt(d.proximo_minimo_estimado)}: cuotas que siguen ${fmt(d.cuotas_que_siguen)} + intereses y seguro.</div>`:''}
-  </details>`;
-}
-function debtCard(d){
-  const t=tasaEA(d); const uso=d.uso_cupo_pct;
-  const hist=(d.historia||[]).filter(h=>h.saldo);
-  let spark='';
-  if(hist.length>1){ const vs=hist.map(h=>h.saldo), mx=Math.max(...vs), mn=Math.min(...vs), W=300,H=46;
-    const pts=vs.map((v,i)=>`${(i*(W-8)/(vs.length-1)+4).toFixed(1)},${(H-6-(H-12)*(mx===mn?0.5:(v-mn)/(mx-mn))).toFixed(1)}`).join(' ');
-    spark=`<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="var(--accent-2)" stroke-width="2"/></svg><div class="sub">Saldo en los últimos ${hist.length} extractos</div>`; }
-  return `<div class="card debt"><div class="head"><div><div class="sub">${esc(d.entidad||'')}</div><b>${esc(d.nombre)}</b></div>${estadoTag(obVivas().some(o=>o.tipo==='deuda'&&o.ref===d.id&&o.ciclo===S.data.ciclo_actual&&o.marcado)?'pagado':d.estado_pago)}</div>
-    <div class="big num" style="margin-top:8px">${fmt(d.saldo)}</div><div class="sub">${d.tipo==='tc'||d.tipo==='rotativo'?'Saldo total':'Saldo de capital'}${d.corte?' · corte '+fechaCorta(d.corte):' · dato de configuración'}</div>
-    ${uso!=null?`<div class="meter ${uso>85?'hot':''}"><div style="width:${Math.min(100,uso)}%"></div></div><div class="sub">Cupo usado ${uso}% · disponible ${fmt(d.cupo_disponible)}</div>`:''}
-    <div class="facts">
-      <div><span>${d.pago_minimo?'Pago mínimo':'Cuota'}</span><b class="num">${fmt(d.pago_minimo||d.cuota)}</b></div>
-      <div><span>Fecha de pago</span><b>${d.descuento_nomina?'Descuento de nómina':fechaCorta(d.fecha_pago)}</b>${d.dias_para_pago!=null&&d.dias_para_pago>=0&&!d.descuento_nomina?` <span class="sub">(${d.dias_para_pago} d)</span>`:''}</div>
-      ${d.intereses_mes?`<div><span>Intereses del periodo</span><b class="num neg">${fmt(d.intereses_mes)}</b></div>`:''}
-      ${t?`<div><span>Tasa efectiva anual</span><b>${t}%</b></div>`:''}
-      ${d.cuotas_pendientes?`<div><span>Cuotas pendientes</span><b>${d.cuotas_pendientes}</b></div>`:''}
-      ${d.saldo_en_cuotas?`<div><span>Compras a cuotas por pagar</span><b class="num">${fmt(d.saldo_en_cuotas)}</b></div>`:''}
-      ${d.pago_minimo_alterno?`<div><span>Pago mínimo alterno</span><b class="num">${fmt(d.pago_minimo_alterno)}</b></div>`:''}
-      ${d.capital_mes?`<div><span>Abono a capital</span><b class="num">${fmt(d.capital_mes)}</b></div>`:''}
-    </div>
-    ${d.tipo==='tc'&&d.desglose_minimo?tcDesglose(d):''}
-    ${d.tipo==='tc'&&d.pago_minimo&&d.saldo?`<div class="note">Pagar solo el mínimo deja ${fmt(d.saldo-d.pago_minimo)} generando intereses al ${t||'—'}% anual.</div>`:''}
-    ${d.nota_pago?`<div class="note">${esc(d.nota_pago)}</div>`:''}
-    ${d.avances?.length?`<div class="note">Avances recientes: ${d.avances.slice(0,4).map(a=>fmt(a.monto)+' ('+fechaCorta(a.fecha)+')').join(', ')}.</div>`:''}
-    ${spark}</div>`;
-}
-
-/* ─────────── Pagos (calendario) ─────────── */
-function claveOb(o){ return o.clave || `${o.ciclo}|${o.ref||o.concepto}`; }
-/* Aplica al instante lo que marcaste en la app, antes de que el flujo vuelva a calcular */
-function obVivas(){
-  const pm=S.ajustes.pagos_marcados||{};
-  return (S.data.obligaciones||[]).map(o=>{ const k=claveOb(o), p=pm[k];
-    if(p) return {...o, clave:k, estado:'pagado', marcado:true, fecha:p.fecha, monto:p.monto||o.monto, medio:p.medio||o.medio, fuente:o.marcado?o.fuente:'marcado por ti'};
-    if(o.marcado && S.desmarcadas?.has(k)) return {...o, clave:k, estado:'pendiente', marcado:false, fuente:'marca quitada · se recalcula en unos minutos'};
-    return {...o, clave:k}; });
-}
-function obRow(o){
-  const [y,m,d]=o.fecha.split('-');
-  if (o.tipo==='variable'){
-    const pct=Math.min(100,100*(o.gastado||0)/(o.monto||1));
-    return `<div class="ob"><div class="date"><b>≈</b><span>ciclo</span></div><div style="min-width:0"><div class="t" style="font-weight:500">${esc(o.concepto)}</div>
-      <div class="meter ${o.estado==='superado'?'hot':''}" style="margin-top:6px"><div style="width:${pct.toFixed(0)}%"></div></div>
-      <div class="sub">Llevas ${fmt(o.gastado||0)}${o.n?` en ${o.n} pago(s)`:''} de ${fmt(o.monto)} previstos${o.nota?' · '+esc(o.nota):''}</div></div>
-      <div class="num" style="font-weight:600">${fmt(Math.max(0,(o.monto||0)-(o.gastado||0)))}<div class="sub" style="text-align:right">por gastar</div></div></div>`;
-  }
-  return `<div class="ob"><div class="date"><b>${+d}</b><span>${MES_C[+m-1]}</span></div><div style="min-width:0"><div class="t" style="font-weight:500;line-height:1.25">${esc(o.concepto)}</div>
-    <div class="sub">${estadoTag(o.estado)} ${esc(o.fuente||'')}${o.medio?' · '+esc(o.medio):''}</div>
-    ${o.estado!=='pagado'?`<button class="acc" data-marcar="${esc(o.clave)}">✓ Ya lo pagué</button>`:(o.marcado?`<button class="acc q" data-desmarcar="${esc(o.clave)}">Quitar marca</button>`:'')}</div>
-    <div class="num" style="font-weight:600">${o.monto?fmt(o.monto):'—'}</div></div>`;
-}
-const TIPO_OB = {deuda:'Deudas', fijo:'Gastos fijos', suscripcion:'Suscripciones', factura:'Facturas', impuesto:'Impuestos', variable:'Gastos variables (estimados)'};
-function vPagos(){
-  const ob=obVivas();
-  const ids=[...new Set(ob.map(o=>o.ciclo))].sort();
-  if(!ids.includes(S.pagosCiclo)) S.pagosCiclo = S.data.ciclo_actual;
-  const xs=ob.filter(o=>o.ciclo===S.pagosCiclo);
-  const fijos=xs.filter(o=>o.tipo!=='variable'), vars=xs.filter(o=>o.tipo==='variable');
-  const pendientes=fijos.filter(o=>!['pagado'].includes(o.estado));
-  const pagados=fijos.filter(o=>o.estado==='pagado');
-  const falta=pendientes.reduce((a,o)=>a+(o.monto||0),0) + vars.reduce((a,o)=>a+Math.max(0,(o.monto||0)-(o.gastado||0)),0);
-  const pagadoT=pagados.reduce((a,o)=>a+(o.monto||0),0);
-  const grupo=(t,arr)=>arr.length?`<div class="card"><h2>${t}</h2>${arr.map(obRow).join('')}</div>`:'';
-  const porTipo=arr=>Object.keys(TIPO_OB).map(k=>[TIPO_OB[k],arr.filter(o=>o.tipo===k)]).filter(([,a])=>a.length);
-  const c=ciclo(S.pagosCiclo);
-  return `<h1>Pagos del ciclo</h1><div class="sub">De nómina a nómina. Te pagan el 26 o el día siguiente.</div>
-  <div class="chips" style="margin:10px 0">${ids.map(id=>`<button class="chip ${id===S.pagosCiclo?'on':''}" data-pciclo="${id}">${esc(ciclo(id).etiqueta)}${id===S.data.ciclo_actual?' · actual':''}</button>`).join('')}</div>
-  <div class="grid g2"><div class="card kpi"><div class="lab">Te falta pagar</div><div class="val num">${fmt(falta)}</div><div class="foot">${esc(c.etiqueta)}</div></div>
-  <div class="card kpi"><div class="lab">Ya pagaste</div><div class="val num pos">${fmt(pagadoT)}</div><div class="foot">${pagados.length} de ${fijos.length} obligaciones</div></div></div>
-  ${porTipo(pendientes).map(([t,a])=>grupo(t+' · pendientes',a)).join('')}
-  ${grupo('Gastos variables (estimados)',vars)}
-  ${grupo('Pagados',pagados)}
-  <div class="note">Si pagaste algo que el banco no avisa (por ejemplo, por Bre-B), toca <b>Ya lo pagué</b>. Cuando llegue el extracto, el pago real reemplaza tu marca sin contarlo dos veces. Lo que pagas por cuenta de tu mamá no aparece aquí.</div>`;
-}
-
-/* ─────────── Más ─────────── */
-function vMas(movs){
-  if (S.sub==='efectivo') return vEfectivo(movs);
-  if (S.sub==='extractos') return vExtractos();
-  if (S.sub==='facturas') return vFacturas();
-  if (S.sub==='calidad') return vCalidad();
-  if (S.sub==='conexion') return vConexion();
-  if (S.sub==='seguridad') return vSeguridad();
-  const opts=[['efectivo',ICON.cash,'Efectivo','Registra gastos en efectivo e ingresos a mano'],['extractos',ICON.doc,'Extractos y documentos','Sube extractos (PDF) o facturas (ZIP/XML)'],
-    ['facturas',ICON.doc,'Facturas','Facturas electrónicas y su pago'],['calidad',ICON.list,'Calidad de datos','Qué tanto cubren los avisos del banco'],['seguridad',ICON.lock,'Seguridad','Clave, Face ID y bloqueo automático'],['conexion',ICON.bank,'Conexión','Repositorio, token y actualización']];
-  return `<h1>Más</h1><div class="more-grid" style="margin-top:12px">${opts.map(([k,i,t,s])=>`<button data-sub="${k}"><div class="ico">${i}</div><b>${t}</b><span>${s}</span></button>`).join('')}</div>`;
-}
-const volver = `<button class="iconbtn" data-sub="" style="margin:6px 0">‹ Más</button>`;
-function vEfectivo(movs){
-  const r = resumenMes(movs,S.mes);
-  const xs = movs.filter(m=>enCiclo(m.fecha,S.mes) && (m.medio==='Efectivo'||m.clase==='retiro'));
-  return `${volver}<h1>Efectivo</h1>${monthbar()}
-  <div class="grid g2"><div class="card kpi"><div class="lab">Retiraste</div><div class="val num">${fmt(r.retiros)}</div></div>
-  <div class="card kpi"><div class="lab">Registrado</div><div class="val num">${fmt(r.efectivo)}</div><div class="foot">${r.sinDetallar?'<span class="warn">Falta detallar '+fmt(r.sinDetallar)+'</span>':'Todo detallado'}</div></div></div>
-  <button class="btn" id="btnEf">Registrar gasto en efectivo</button>
-  <button class="btn sec" id="btnIng">Registrar un ingreso</button>
-  <div class="card list" style="margin-top:12px">${xs.length?xs.map(movRow).join(''):'<div class="empty">Sin movimientos en efectivo en este ciclo.</div>'}</div>
-  <div class="note">Las facturas electrónicas pagadas en efectivo se registran solas. Los gastos que escribas aquí se guardan en tu repositorio (<code>data/manual/movimientos.json</code>).</div>`;
-}
-function vExtractos(){
-  const xs=S.data.extractos||[];
-  const tipos={ahorros:'Cuenta de ahorros',tc:'Tarjeta de crédito',hipotecario:'Hipotecario',cupoya:'CupoYa',libranza:'Libranza',nomina:'Nómina'};
-  return `${volver}<h1>Extractos y documentos</h1><div class="sub">Los extractos de la tarjeta, el hipotecario, CupoYa y Comultrasan llegan solos por correo y se leen en la siguiente actualización. Hay que subir a mano el extracto de la cuenta de ahorros Davibank y el desprendible de nómina, que no llegan por correo.</div>
-  <div class="card" style="margin-top:12px"><h2>Subir un documento</h2>
-    <div class="kv" style="margin-bottom:6px"><span>PDF</span><b style="font-weight:500">Extractos de Davibank (ahorros, tarjeta, hipotecario), CupoYa, Comultrasan y desprendible de nómina. Con o sin clave.</b><span>ZIP o XML</span><b style="font-weight:500">Factura electrónica DIAN que no te llegó al correo.</b></div>
-    <label class="f">Tipo</label><select class="inp" id="upTipo"><option value="ahorros">Cuenta de ahorros Davibank</option><option value="">Detectar automáticamente</option><option value="tc">Tarjeta de crédito</option><option value="hipotecario">Crédito hipotecario</option><option value="cupoya">CupoYa Compensar</option><option value="comultrasan">Comultrasan</option><option value="nomina">Desprendible de nómina</option><option value="factura">Factura electrónica (ZIP o XML)</option></select>
-    <label class="drop" style="display:block;margin-top:10px">Toca para elegir el archivo<input type="file" id="upFile" accept="application/pdf,.pdf,.zip,application/zip,.xml,text/xml,application/xml" class="hide"></label>
-    <div class="sub" id="upInfo" style="margin-top:6px">Si el PDF tiene clave, se abre con tu cédula. No se leen fotos ni capturas de pantalla: para un gasto en efectivo usa el botón Efectivo.</div></div>
-  <div class="card"><h2>Recibidos</h2><table class="t"><tr><th>Producto</th><th>Corte</th><th class="r">Movs.</th></tr>
-  ${xs.map(x=>`<tr><td>${esc(tipos[x.tipo]||x.tipo)}<div class="sub">${esc(x.entidad||'')}</div></td><td>${fechaCorta(x.corte)} ${(x.corte||'').slice(0,4)}</td><td class="r">${x.n_movimientos||'—'}</td></tr>`).join('')}</table></div>`;
-}
-function vFacturas(){
-  const fs=(S.data.facturas||[]).slice(0,150);
-  return `${volver}<h1>Facturas electrónicas</h1><div class="sub">Llegan por correo (XML en ZIP). Se cruzan con el pago; si no hay pago bancario y dicen “efectivo”, quedan como gasto en efectivo.</div>
-  <div class="card list" style="margin-top:12px">${fs.length?fs.map(f=>`<div class="it" data-fac="${esc(f.id)}"><div class="ico">${ICON.doc}</div><div class="main"><div class="t">${esc(f.comercial||f.emisor)}</div>
-  <div class="s">${fechaCorta(f.fecha)} · ${esc(f.tipo_nombre)} · ${esc(f.medio)}${f.forma_pago==='credito'?' · vence '+fechaCorta(f.vence):''}</div></div>
-  <div class="amt num">${fmt(f.total)}<small>${f.movimiento?'<span class="pos">vinculada</span>':(f.pagada_con?'<span class="pos">pagada</span>':(f.forma_pago==='credito'?'por pagar':'sin pago'))}</small></div></div>`).join(''):'<div class="empty">Aún no hay facturas.</div>'}</div>`;
-}
-function vCalidad(){
-  const c=S.data.calidad||{}; const ms=Object.keys(c).sort().reverse();
-  return `${volver}<h1>Calidad de datos</h1><div class="sub">Por ciclo de nómina: cuánto de lo que gastaste y pagaste se conoce por aviso del banco, por extracto o por factura. Lo que solo aparece en extracto es lo que el correo diario anterior nunca contaba.</div>
-  ${ms.map(m=>`<div class="card"><h2>${esc(ciclo(m).etiqueta)} <span class="sub">· ${fmt(c[m].total)}</span></h2>${coberturaHTML(c[m])}</div>`).join('')}`;
-}
-function vConexion(){
-  const c=S.cfg||{};
-  return `${volver}<h1>Conexión</h1>
-  <div class="card"><div class="kv"><span>Repositorio</span><b>${esc(c.owner||'—')}/${esc(c.repo||'—')}</b><span>Rama</span><b>${esc(c.branch||'main')}</b>
-  <span>Datos generados</span><b>${esc(S.data?.generado||'—')}</b><span>Última ejecución</span><b>${esc(JSON.stringify(S.data?.ultima_ejecucion||{}).slice(0,120))}</b></div>
-  <button class="btn" id="btnUpd2">Actualizar ahora (leer correo)</button>
-  <label class="f">Tema</label><div class="seg" id="tema">${['auto','light','dark'].map(t=>`<button data-tema="${t}" class="${(store.get('fin.tema','auto'))===t?'on':''}">${{auto:'Automático',light:'Claro',dark:'Oscuro'}[t]}</button>`).join('')}</div>
-  <button class="btn danger" id="btnSalir">Cerrar sesión en este dispositivo</button></div>`;
-}
-
-/* ═══════════════════ Interacción ═══════════════════ */
-function wire(movs){
-  document.querySelectorAll('[data-mes]').forEach(b=>b.onclick=()=>{ if(b.dataset.mes){ S.mes=b.dataset.mes; render(); } });
-  document.querySelectorAll('[data-marcar]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); abrirMarcar(obVivas().find(o=>o.clave===b.dataset.marcar)); });
-  document.querySelectorAll('[data-desmarcar]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); quitarMarca(obVivas().find(o=>o.clave===b.dataset.desmarcar)); });
-  document.querySelectorAll('[data-pciclo]').forEach(b=>b.onclick=()=>{ S.pagosCiclo=b.dataset.pciclo; render(); });
-  document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ S.filtro=b.dataset.f; render(); });
-  document.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{ S.cat=b.dataset.cat==='Efectivo sin detallar'?null:b.dataset.cat; S.filtro='todos'; S.tab='movs'; render(); scrollTo(0,0); });
-  document.querySelectorAll('[data-clearcat]').forEach(b=>b.onclick=()=>{ S.cat=null; render(); });
-  document.querySelectorAll('[data-sub]').forEach(b=>b.onclick=()=>{ S.sub=b.dataset.sub||null; render(); scrollTo(0,0); });
-  document.querySelectorAll('[data-go]').forEach(b=>b.onclick=e=>{ e.preventDefault(); S.tab='mas'; S.sub=b.dataset.go; render(); });
-  document.querySelectorAll('[data-filtro]').forEach(b=>b.onclick=e=>{ e.preventDefault(); S.filtro=b.dataset.filtro; S.tab='movs'; render(); scrollTo(0,0); });
-  document.querySelectorAll('[data-go-tab]').forEach(b=>b.onclick=()=>{ S.tab=b.dataset.goTab; render(); scrollTo(0,0); });
-  document.querySelectorAll('[data-mov]').forEach(b=>b.onclick=()=>abrirMov(movs.find(m=>m.id===b.dataset.mov)));
-  document.querySelectorAll('[data-fac]').forEach(b=>b.onclick=()=>abrirFactura((S.data.facturas||[]).find(f=>f.id===b.dataset.fac)));
-  const q=$('#q'); if(q){ q.oninput=()=>{ S.q=q.value; clearTimeout(q._t); q._t=setTimeout(()=>{ const pos=q.selectionStart; render(); const n=$('#q'); n.focus(); n.setSelectionRange(pos,pos); },250); }; }
-  $('#btnEf') && ($('#btnEf').onclick=()=>abrirEfectivo('gasto'));
-  $('#btnIng') && ($('#btnIng').onclick=()=>abrirEfectivo('ingreso'));
-  $('#btnUpd2') && ($('#btnUpd2').onclick=actualizarAhora);
-  $('#btnSalir') && ($('#btnSalir').onclick=async()=>{ if(confirm('¿Borrar el token de este dispositivo?')){ await SEG.idbDel('bio'); localStorage.removeItem('fin.cfg'); location.reload(); } });
-  wireSeguridad();
-  document.querySelectorAll('[data-tema]').forEach(b=>b.onclick=()=>{ store.set('fin.tema',b.dataset.tema); aplicarTema(); render(); });
-  const up=$('#upFile'); if(up) up.onchange=()=>subirPDF(up.files[0], $('#upTipo').value);
-}
-function abrirSheet(html){ $('#sheetBody').innerHTML=html; $('#sheetBg').style.display='block'; requestAnimationFrame(()=>$('#sheet').classList.add('open')); }
-function cerrarSheet(){ $('#sheet').classList.remove('open'); setTimeout(()=>$('#sheetBg').style.display='none',200); }
-$('#sheetBg').onclick=cerrarSheet;
-
-function opcionesCat(sel){ const cs=[...(S.data.categorias||[])]; if(sel && !cs.includes(sel)) cs.unshift(sel); return cs.map(c=>`<option ${c===sel?'selected':''}>${esc(c)}</option>`).join(''); }
-
-function abrirMov(m){
-  if(!m) return;
-  const f = m.factura ? (S.data.facturas||[]).find(x=>x.id===m.factura) : null;
-  const fu = (m.fuentes||[]).map(s=>({davibank_tarjeta:'Aviso de compra Davibank',davibank_online:'Aviso de banca online',davibank_debito_auto:'Aviso de pago automático',pse:'Comprobante PSE',compensar_avance:'Aviso de Compensar',extracto_ahorros:'Extracto de ahorros',extracto_tc:'Extracto de tarjeta',factura:'Factura electrónica',manual:'Registro manual',marcado:'Marcado como pagado por ti (provisional)',desprendible:'Desprendible de nómina'}[s]||s));
-  const prov = String(m.id).startsWith('marcado:');
-  const editable = m.manual && !prov;
-  const clases=[['tercero','Por cuenta de otra persona (no contar)'],['consumo','Gasto'],['ingreso','Ingreso'],['deuda','Pago a deuda'],['credito','Plata prestada (avance)'],['ahorro','Ahorro/inversión'],['retiro','Retiro de efectivo'],['interno','Entre mis cuentas (no contar)']];
-  abrirSheet(`<div class="sub">${fechaLarga(m.fecha)}${m.hora?' · '+esc(m.hora):''}</div><h2 style="font-size:19px;margin:4px 0">${esc(m.contraparte)}</h2>
-   <div class="num ${m.dir==='in'?'pos':''}" style="font-size:26px;font-weight:700">${m.dir==='in'?'+':'−'}${fmt(m.monto)}</div>
-   <div class="kv"><span>Medio</span><b>${esc(m.medio||'—')}</b>${m.cuenta?`<span>Cuenta</span><b>${esc(m.cuenta)}</b>`:''}${m.cuotas?`<span>Cuotas</span><b>${esc(m.cuotas)}</b>`:''}
-   ${m.descripcion&&m.descripcion!==m.contraparte?`<span>Descripción</span><b>${esc(m.descripcion)}</b>`:''}${m.detalle&&m.detalle!==m.contraparte?`<span>Detalle</span><b>${esc(m.detalle)}</b>`:''}
-   <span>Fuentes</span><b>${fu.map(esc).join(' + ')}</b>${m.sin_notificacion?'<span></span><b class="warn">El banco no envió aviso de este movimiento</b>':''}</div>
-   ${f?`<div class="note"><b>Factura ${esc(f.numero)}</b> · ${esc(f.emisor)} · NIT ${esc(f.nit||'')}<div class="items">${(f.items||[]).slice(0,40).map(i=>`<div><span>${esc(i.d)}${i.q&&i.q!==1?' ×'+i.q:''}</span><span class="num">${fmt(i.v)}</span></div>`).join('')}</div></div>`:''}
-   ${prov?`<div class="note">Es un pago que marcaste como hecho en <b>Pagos</b>. Se reemplaza solo cuando llegue el movimiento del banco; si te equivocaste, quítalo allá con <b>Quitar marca</b>.</div>`:''}
-   ${m.clase==='retiro'?`<div class="note" style="margin-top:12px"><b>¿En qué gastaste este efectivo?</b>
-     <div class="sub" style="margin:2px 0 6px">Si todo se fue en una sola cosa, elige la categoría: el retiro queda como ese gasto y no tienes que registrar nada más. Si se repartió, regístralo por partes.</div>
-     <select class="inp" id="rCat">${opcionesCat('Comidas fuera y snacks')}</select>
-     <button class="btn" id="rTodo">Todo fue en esta categoría</button><button class="btn sec" id="rPartes">Repartirlo en varios gastos en efectivo</button></div>`:''}
-   ${editable?`<label class="f">Valor</label><input class="inp big num" id="mVal" inputmode="numeric" value="$ ${Math.round(m.monto).toLocaleString('es-CO')}">
-   <div class="row2"><div><label class="f">Fecha</label><input class="inp" type="date" id="mFecha" value="${esc(m.fecha)}"></div>
-   <div><label class="f">Descripción</label><input class="inp" id="mDesc" value="${esc(m.descripcion||'')}" placeholder="Opcional"></div></div>`:''}
-   ${prov?'':`<label class="f">Categoría</label><select class="inp" id="mCat">${opcionesCat(m.categoria)}</select>
-   ${editable?'':`<label class="f">Tipo de movimiento</label><select class="inp" id="mClase">${clases.map(([k,l])=>`<option value="${k}" ${m.clase===k?'selected':''}>${l}</option>`).join('')}</select>
-   <label class="f" style="display:flex;gap:8px;align-items:center;color:var(--text)"><input type="checkbox" id="mRegla"> Aplicar siempre a “${esc((m.contraparte||'').slice(0,30))}”</label>`}
-   <label class="f">Nota</label><input class="inp" id="mNota" value="${esc(m.nota||'')}" placeholder="Opcional">
-   <button class="btn" id="mGuardar">Guardar</button>
-   ${editable?'<button class="btn danger" id="mBorrar">Borrar este registro</button>':''}`}`);
-  if (prov) return;
-  if ($('#mVal')) $('#mVal').oninput=e=>{ const n=e.target.value.replace(/\D/g,''); e.target.value=n?'$ '+(+n).toLocaleString('es-CO'):''; };
-  if ($('#rTodo')) $('#rTodo').onclick=async()=>{ const cat=$('#rCat').value; $('#rTodo').disabled=true;
-    try{ await guardarAjuste(aj=>{ aj.movimientos[m.id]={categoria:cat, clase:'consumo', nota:'Retiro en efectivo gastado en '+cat}; return aj; }, `Detallar retiro: ${cat} ${m.monto}`);
-      cerrarSheet(); render(); toast('Listo: el retiro quedó como '+cat); }
-    catch(e){ $('#rTodo').disabled=false; toast(e.message,6000); } };
-  if ($('#rPartes')) $('#rPartes').onclick=()=>{ cerrarSheet(); setTimeout(()=>abrirEfectivo('gasto'),220); };
-  /* Si GitHub devuelve una versión atrasada sin este registro, se usa la copia de la app */
-  const conRegistro = xs => { let e=xs.find(x=>x.id===m.id); if(!e){ const loc=S.manual.find(x=>x.id===m.id); if(loc){ e={...loc}; xs.push(e); } } return e; };
-  $('#mGuardar').onclick=async()=>{
-    const cat=$('#mCat').value, nota=$('#mNota').value.trim();
-    const clase=$('#mClase')?$('#mClase').value:m.clase, regla=$('#mRegla')?$('#mRegla').checked:false;
-    $('#mGuardar').disabled=true;
-    try{
-      if (editable){ const monto=+$('#mVal').value.replace(/\D/g,''); if(!monto){ $('#mGuardar').disabled=false; toast('Escribe el valor'); return; }
-        const fecha=$('#mFecha').value||m.fecha, desc=$('#mDesc').value.trim();
-        await guardarManual(xs=>{ const e=conRegistro(xs); if(e){ e.categoria=cat; e.nota=nota; e.monto=monto; e.fecha=fecha; e.descripcion=desc; e.editado=new Date().toISOString(); } return xs; }, `Editar registro: ${desc||cat} ${monto}`);
-        S.mes=cicloDe(fecha); }
-      else await guardarAjuste(aj=>{ aj.movimientos[m.id]={categoria:cat, clase, ...(nota?{nota}:{}), ...(clase==='interno'?{ignorar:true}:{})};
-        if(regla){ const pat=norm(m.contraparte).replace(/\s*\d{4,}$/,'').trim().replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-          if(pat.length>=3){ aj.reglas = aj.reglas.filter(r=>r.patron!==pat); aj.reglas.unshift({patron:pat, categoria:cat, clase}); } } return aj; }, `Clasificar ${m.contraparte}`);
-      cerrarSheet(); render(); toast('Guardado'+(regla?' y aplicado a los demás':''));
-    }catch(e){ $('#mGuardar').disabled=false; toast(e.message,6000); }
-  };
-  if($('#mBorrar')) $('#mBorrar').onclick=async()=>{ if(!confirm('¿Borrar este registro?')) return;
-    $('#mBorrar').disabled=true;
-    try{ await guardarManual(xs=>{ const e=conRegistro(xs); if(e) e.borrado=true; return xs; }, `Borrar registro: ${m.descripcion||m.categoria} ${m.monto}`); cerrarSheet(); render(); toast('Borrado'); }
-    catch(e){ $('#mBorrar').disabled=false; toast(e.message,6000); } };
-}
-function abrirMarcar(o){
-  if(!o) return;
-  const hoy=hoyISO(), f0=(o.fecha&&o.fecha<=hoy)?o.fecha:hoy;
-  const medios=['Bre-B / Nequi / Daviplata','PSE','Transferencia','Débito','Tarjeta de crédito','Efectivo','Otro'];
-  const m0=o.medio==='Bre-B'?medios[0]:(medios.includes(o.medio)?o.medio:({deuda:'PSE',suscripcion:'Tarjeta de crédito',impuesto:'PSE'}[o.tipo]||medios[0]));
-  abrirSheet(`<div class="sub">Ciclo ${esc(ciclo(o.ciclo).etiqueta)}</div><h2 style="font-size:19px;margin:4px 0">¿Ya pagaste ${esc(o.concepto)}?</h2>
-   <label class="f">Valor pagado</label><input class="inp big num" id="kVal" inputmode="numeric" value="${o.monto?'$ '+Math.round(o.monto).toLocaleString('es-CO'):''}" placeholder="$ 0" autocomplete="off">
-   <div class="row2"><div><label class="f">Fecha del pago</label><input class="inp" type="date" id="kFecha" value="${f0}"></div>
-   <div><label class="f">Pagado con</label><select class="inp" id="kMedio">${medios.map(x=>`<option ${x===m0?'selected':''}>${x}</option>`).join('')}</select></div></div>
-   <label class="f" style="display:flex;gap:10px;align-items:flex-start;color:var(--text)"><input type="checkbox" id="kGasto" checked style="margin-top:3px"><span>Contarlo en los gastos del ciclo
-   <span class="sub" style="display:block">Mientras llega el movimiento del banco. Cuando aparezca en un aviso o extracto, se cambia por el real y no se cuenta dos veces.</span></span></label>
-   <label class="f">Nota</label><input class="inp" id="kNota" placeholder="Opcional">
-   <button class="btn" id="kGuardar">Marcar como pagado</button>`);
-  const val=$('#kVal'); val.oninput=()=>{ const n=val.value.replace(/\D/g,''); val.value=n?'$ '+(+n).toLocaleString('es-CO'):''; };
-  $('#kGuardar').onclick=async()=>{
-    const monto=+val.value.replace(/\D/g,''); if(!monto){ toast('Escribe el valor'); return; }
-    const medioSel=$('#kMedio').value, nota=$('#kNota').value.trim();
-    const p={ciclo:o.ciclo, ref:o.ref||null, tipo:o.tipo, concepto:o.concepto, fecha:$('#kFecha').value||hoy, monto,
-      medio:medioSel.startsWith('Bre-B')?'Bre-B':medioSel, gasto:$('#kGasto').checked, ...(nota?{nota}:{}), marcado_el:new Date().toISOString()};
-    $('#kGuardar').disabled=true;
-    try{ await guardarAjuste(aj=>{ aj.pagos_marcados ||= {}; aj.pagos_marcados[o.clave]=p; return aj; }, `Pago marcado: ${o.concepto} ${monto}`);
-      S.desmarcadas?.delete(o.clave); cerrarSheet(); render(); toast('Marcado como pagado'); }
-    catch(e){ $('#kGuardar').disabled=false; toast(e.message,5000); }
-  };
-}
-async function quitarMarca(o){
-  if(!o || !confirm(`¿Quitar la marca de pagado de “${o.concepto}”?`)) return;
-  try{ await guardarAjuste(aj=>{ if(aj.pagos_marcados) delete aj.pagos_marcados[o.clave]; return aj; }, `Quitar marca de pago: ${o.concepto}`);
-    (S.desmarcadas ||= new Set()).add(o.clave); render(); toast('Marca quitada'); }
-  catch(e){ toast(e.message,5000); }
-}
-function abrirFactura(f){
-  if(!f) return;
-  abrirSheet(`<div class="sub">${fechaCorta(f.fecha)} ${f.fecha?.slice(0,4)||''} · ${esc(f.tipo_nombre)} ${esc(f.numero)}</div><h2 style="font-size:19px;margin:4px 0">${esc(f.emisor)}</h2>
-  <div class="num" style="font-size:26px;font-weight:700">${fmt(f.total)}</div>
-  <div class="kv"><span>NIT</span><b>${esc(f.nit||'—')}</b><span>Forma de pago</span><b>${f.forma_pago==='credito'?'A crédito · vence '+fechaCorta(f.vence):'De contado'}</b><span>Medio</span><b>${esc(f.medio)}</b>
-  ${f.a_nombre_de?`<span>A nombre de</span><b>${esc(f.a_nombre_de)}</b>`:''}<span>Estado</span><b>${f.movimiento?'Vinculada a un movimiento':(f.pagada_con?'Pagada':'Sin pago identificado')}</b></div>
-  <div class="items">${(f.items||[]).map(i=>`<div><span>${esc(i.d)}${i.q&&i.q!==1?' ×'+i.q:''}</span><span class="num">${fmt(i.v)}</span></div>`).join('')}</div>`);
-}
-function abrirEfectivo(tipo='gasto'){
-  const ing = tipo==='ingreso';
-  abrirSheet(`<h2 style="font-size:19px">${ing?'Registrar ingreso':'Gasto en efectivo'}</h2>
-  <div class="seg" id="tipoSeg"><button data-t="gasto" class="${!ing?'on':''}">Gasto en efectivo</button><button data-t="ingreso" class="${ing?'on':''}">Ingreso</button></div>
-  <label class="f">Valor</label><input class="inp big num" id="eVal" inputmode="numeric" placeholder="$ 0" autocomplete="off">
-  <div class="row2"><div><label class="f">Fecha</label><input class="inp" type="date" id="eFecha" value="${hoyISO()}"></div>
-  <div><label class="f">${ing?'Medio':'Pagado con'}</label><select class="inp" id="eMedio">${(ing?['Transferencia','Efectivo','Consignación','Otro']:['Efectivo','Bre-B / Nequi / Daviplata','Otro']).map(x=>`<option>${x}</option>`).join('')}</select></div></div>
-  <label class="f">Categoría</label><select class="inp" id="eCat">${ing?['Nómina INMLCF','Honorarios y docencia','Transferencias recibidas','Reintegros y devoluciones','Otros ingresos'].map(c=>`<option>${c}</option>`).join(''):opcionesCat('Comidas fuera y snacks')}</select>
-  <label class="f">Descripción</label><input class="inp" id="eDesc" placeholder="${ing?'Ej: clase en la FUCS':'Ej: almuerzo, taxi, tienda'}">
-  <div class="sub" style="margin-top:8px">${ing?'Si el banco también lo reporta (nómina, transferencia), cuando llegue el extracto se une con ese movimiento y no se cuenta dos veces.':'Si es plata que sacaste del cajero y se fue toda en una sola cosa, es más fácil tocar el retiro en Movimientos y elegir la categoría.'}</div>
-  <button class="btn" id="eGuardar">Guardar</button>`);
-  const val=$('#eVal'); val.focus();
-  val.oninput=()=>{ const n=val.value.replace(/\D/g,''); val.value=n?'$ '+(+n).toLocaleString('es-CO'):''; };
-  document.querySelectorAll('#tipoSeg [data-t]').forEach(b=>b.onclick=()=>abrirEfectivo(b.dataset.t));
-  $('#eGuardar').onclick=async()=>{
-    const monto=+val.value.replace(/\D/g,''); if(!monto){ toast('Escribe el valor'); return; }
-    const medioSel=$('#eMedio').value;
-    const e={id:uid(), tipo:ing?'ingreso':'gasto', fecha:$('#eFecha').value||hoyISO(), monto, categoria:$('#eCat').value, descripcion:$('#eDesc').value.trim(),
-      medio: medioSel.startsWith('Bre-B')?'Bre-B':medioSel, creado:new Date().toISOString()};
-    $('#eGuardar').disabled=true;
-    try{ await guardarManual(xs=>[...xs,e], `${ing?'Ingreso':'Gasto en efectivo'}: ${e.descripcion||e.categoria} ${monto}`);
-      cerrarSheet(); S.mes=cicloDe(e.fecha); render(); toast('Guardado en tu repositorio'); }
-    catch(err){ $('#eGuardar').disabled=false; toast(err.message,6000); }
-  };
-}
-
-/* Guarda un JSON del repositorio. Justo después de guardar, GitHub a veces entrega la versión
-   anterior del archivo; con esa versión el siguiente guardado fallaba (error 409). Aquí se detecta,
-   se usa la copia recién guardada y, si hay un choque, se reintenta. */
-const ULTIMO = {};
-function mensajeGH(e){
-  const t = e?.message||String(e);
-  if (/GitHub 409|GitHub 422/.test(t)) return 'Otro cambio se estaba guardando al mismo tiempo. Espera unos segundos y vuelve a intentarlo.';
-  if (/GitHub 401|GitHub 403/.test(t)) return 'GitHub rechazó el token (venció o no tiene permiso de escritura). Revísalo en Más → Conexión.';
-  if (/Failed to fetch|NetworkError/.test(t)) return 'Sin conexión con GitHub. Revisa tu internet e intenta de nuevo.';
-  return t;
-}
-async function guardarJSON(path, vacio, fn, msg){
-  let error;
-  for (let i=0; i<4; i++){
-    let cur = await GH.json(path);
-    const u = ULTIMO[path];
-    if (u && cur.sha === u.prev) cur = {data: JSON.parse(JSON.stringify(u.data)), sha: u.sha};
-    const nuevo = fn(cur.data ?? JSON.parse(JSON.stringify(vacio)));
-    try{
-      const sha = await GH.put(path, b64(JSON.stringify(nuevo,null,1)), cur.sha, msg);
-      ULTIMO[path] = {prev: cur.sha, sha, data: nuevo};
-      return {data: nuevo, sha};
-    }catch(e){
-      error = e;
-      if (!/GitHub (409|422)/.test(e.message)) break;
-      await new Promise(r=>setTimeout(r, 1500*(i+1)));
-    }
-  }
-  throw new Error(mensajeGH(error));
-}
-async function guardarManual(fn, msg){
-  if (S.demo){ S.manual = fn(JSON.parse(JSON.stringify(S.manual))); toast('Vista previa: no se guardó en GitHub'); return; }
-  const r = await guardarJSON('data/manual/movimientos.json', [], fn, msg);
-  S.manual = r.data; S.manualSha = r.sha;
-}
-async function guardarAjuste(fn, msg){
-  const conBase = a => { a.movimientos ||= {}; a.reglas ||= []; return fn(a); };
-  if (S.demo){ S.ajustes = conBase(JSON.parse(JSON.stringify(S.ajustes))); return; }
-  const r = await guardarJSON('data/manual/ajustes.json', {movimientos:{},reglas:[]}, conBase, msg);
-  S.ajustes = r.data; S.ajustesSha = r.sha;
-}
-async function subirPDF(file, tipo){
-  if(!file) return;
-  if(file.size>15e6){ toast('El archivo pesa más de 15 MB'); return; }
-  const ext=(file.name.split('.').pop()||'').toLowerCase();
-  if(!['pdf','zip','xml'].includes(ext)){ toast('Solo PDF, ZIP o XML'); return; }
-  if(ext==='pdf' && tipo==='factura'){ toast('La factura electrónica se sube en ZIP o XML: el PDF solo no trae los datos',5000); return; }
-  if(ext!=='pdf') tipo='';
-  const info=$('#upInfo'); info.textContent='Subiendo…';
-  if (S.demo){ info.textContent='Vista previa: el archivo no se sube.'; return; }
-  const buf=new Uint8Array(await file.arrayBuffer()); let bin=''; for(let i=0;i<buf.length;i+=0x8000) bin+=String.fromCharCode.apply(null,buf.subarray(i,i+0x8000));
-  const nombre=(tipo?tipo+'__':'')+Date.now()+'_'+file.name.replace(/[^\w.\-]+/g,'_');
-  try{ await GH.put('inbox/'+nombre, btoa(bin), null, `Documento subido desde la app: ${file.name}`);
-    info.innerHTML='Listo. Se procesa en 1–3 minutos; luego toca <b>Actualizar</b> arriba.'; toast('Archivo subido'); }
-  catch(e){ info.textContent=e.message; }
-}
-async function actualizarAhora(){
-  if (S.demo){ toast('Vista previa: sin conexión a GitHub'); return; }
-  try{ await GH.dispatch(); toast('Leyendo tu correo… recarga en 2 minutos',4000);
-    setTimeout(async()=>{ try{ await cargar(); render(); toast('Datos actualizados'); }catch(e){} }, 120000);
-  }catch(e){
-    try{ await cargar(); render(); toast('Datos recargados'); }catch(e2){ toast(e.message,5000); }
-  }
-}
-
-/* ═══════════════════ Seguridad: clave y Face ID ═══════════════════
-   El token de GitHub no queda guardado en claro: se cifra (AES-GCM) con una llave que sale de tu
-   clave (PBKDF2, 310.000 vueltas). Con Face ID se guarda otra copia cifrada con una llave que el
-   teléfono solo entrega después de reconocer tu cara (passkey WebAuthn, extensión PRF). Si el
-   navegador no tiene PRF, la llave queda en este dispositivo y solo se usa tras Face ID. */
 const SEG = {
   ITER: 310000, te: new TextEncoder(), td: new TextDecoder(),
   b64u(buf){ let s=''; new Uint8Array(buf).forEach(b=>s+=String.fromCharCode(b)); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); },
@@ -893,11 +247,6 @@ const SEG = {
   uvOk(authData){ const a=new Uint8Array(authData); return a.length>32 && (a[32] & 0x04)!==0; },
 };
 const BIO = /iPhone|iPad|Macintosh/.test(navigator.userAgent) ? 'Face ID' : 'huella o rostro';
-const AUTO_OPC = [[0,'Al salir'],[2,'2 min'],[10,'10 min']];
-
-/* Guarda la configuración sin el token en claro */
-function guardarCfg(){ const {token, ...resto} = S.cfg; store.set('fin.cfg', resto); }
-
 function intentos(){ return store.get('fin.intentos', {n:0, hasta:0}); }
 
 /* Teclado numérico. modo: 'entrar' | 'crear' | 'confirmar' */
@@ -926,54 +275,10 @@ function teclado({titulo, sub, n, alCompletar, conBio, pie}){
   return {msg, fallo};
 }
 
-function vCrearClave(anterior){
-  const sub = anterior ? 'Ahora la app se protege con una clave. Elige entre 4 y 8 dígitos y luego toca Listo.' : 'Elige entre 4 y 8 dígitos y luego toca Listo.';
-  teclado({titulo:'Crea tu clave', sub, alCompletar: async (pin)=>{
-    teclado({titulo:'Repite tu clave', sub:'Para confirmar.', n:pin.length, alCompletar: async (pin2, fallo)=>{
-      if (pin2!==pin){ fallo('No coincide. Vuelve a intentarlo.'); setTimeout(()=>vCrearClave(anterior),900); return; }
-      await fijarClave(pin);
-      if (await SEG.bioDisponible()) vOfrecerBio(); else entrar();
-    }});
-  }});
-}
-async function fijarClave(pin){
-  const salt=SEG.rnd(16); const llave=await SEG.llavePin(pin, salt);
-  S.cfg.seg = {...(S.cfg.seg||{}), pin:{salt:SEG.b64u(salt), n:pin.length, ...(await SEG.cifrar(llave, S.cfg.token))}, auto:S.cfg.seg?.auto ?? 2};
-  guardarCfg();
-}
-function vOfrecerBio(){
-  $('#app').innerHTML = `<div class="lock"><div class="brand"><div class="logo">${ICON.logo}</div><span style="font-size:20px">Mis finanzas</span></div>
-    <div style="color:var(--accent-2);margin:10px 0">${ICON.cara.replace('width="34" height="34"','width="64" height="64"')}</div>
-    <h2>¿Entrar con ${BIO}?</h2><div class="sub">Así no tienes que escribir la clave cada vez. El teléfono te pedirá guardar una llave de acceso para esta página.</div>
-    <button class="btn" id="bSi">Activar ${BIO}</button><button class="btn sec" id="bNo">Ahora no</button><div class="msg" id="lmsg"></div></div>`;
-  $('#bSi').onclick=async()=>{ $('#bSi').disabled=true; try{ await activarBio(); toast(BIO+' activado'); entrar(); }
-    catch(e){ $('#bSi').disabled=false; $('#lmsg').textContent=errorBio(e); $('#lmsg').className='msg neg'; } };
-  $('#bNo').onclick=()=>entrar();
-}
 function errorBio(e){
   if (e?.name==='NotAllowedError') return `Se canceló o no se pudo usar ${BIO}. Puedes intentarlo de nuevo.`;
   if (e?.name==='InvalidStateError') return `Ya hay una llave guardada para esta página. Intenta de nuevo.`;
   return e?.message || String(e);
-}
-async function activarBio(){
-  const prfSalt=SEG.rnd(32);
-  const cred = await navigator.credentials.create({publicKey:{
-    rp:{name:'Mis finanzas', id:location.hostname}, user:{id:SEG.rnd(16), name:'Mis finanzas', displayName:'Mis finanzas'},
-    challenge:SEG.rnd(32), pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
-    authenticatorSelection:{authenticatorAttachment:'platform', userVerification:'required', residentKey:'preferred'},
-    timeout:60000, attestation:'none', extensions:{prf:{eval:{first:prfSalt}}} }});
-  const ext = cred.getClientExtensionResults?.() || {};
-  let secreto = ext.prf?.results?.first;
-  if (!secreto && ext.prf?.enabled){
-    try{ const a = await navigator.credentials.get({publicKey:{challenge:SEG.rnd(32), rpId:location.hostname, allowCredentials:[{type:'public-key', id:cred.rawId}],
-        userVerification:'required', timeout:60000, extensions:{prf:{eval:{first:prfSalt}}}}});
-      secreto = a.getClientExtensionResults?.().prf?.results?.first; }catch(e){ /* sigue sin PRF */ }
-  }
-  let llave, modo;
-  if (secreto){ llave=await SEG.llavePRF(secreto); modo='prf'; }
-  else { llave=await crypto.subtle.generateKey({name:'AES-GCM', length:256}, false, ['encrypt','decrypt']); await SEG.idbPut('bio', llave); modo='llave'; }
-  S.cfg.seg.bio = {credId:SEG.b64u(cred.rawId), modo, prfSalt:SEG.b64u(prfSalt), ...(await SEG.cifrar(llave, S.cfg.token))};
-  guardarCfg();
 }
 async function tokenConBio(){
   const b=S.cfg.seg.bio;
@@ -986,91 +291,73 @@ async function tokenConBio(){
   else { llave=await SEG.idbGet('bio'); if(!llave) throw new Error(`Se perdió la llave de ${BIO} en este teléfono. Entra con tu clave y vuelve a activarlo en Más → Seguridad.`); }
   return SEG.descifrar(llave, b);
 }
-function vBloqueo(alAbrir){
-  S.bloqueado=true; S.cfg.token=null; try{ cerrarSheet(); }catch(e){}
+
+function vError(t){
+  $('#app').innerHTML=`<div class="lock"><div class="brand"><div class="logo">${ICON.logo}</div><span style="font-size:20px">Mis finanzas</span></div>
+    <div class="msg neg">${esc(t)}</div><button class="btn" id="bRe">Reintentar</button></div>`;
+  $('#bRe').onclick=()=>inicio(false);
+}
+
+/* Descarga la app desde el repositorio privado y la abre en esta misma página */
+async function abrir(token){
+  const c=S.cfg;
+  $('#app').innerHTML='<div class="setup"><div class="empty">Cargando tus finanzas…</div></div>';
+  let r;
+  try{ r=await fetch(`https://api.github.com/repos/${c.owner}/${c.repo}/contents/app/index.html?ref=${c.branch||'main'}&t=${Date.now()}`,
+      {cache:'no-store', headers:{'Authorization':'Bearer '+token,'X-GitHub-Api-Version':'2022-11-28','Accept':'application/vnd.github.raw+json'}}); }
+  catch(e){ vError('Sin conexión con GitHub. Revisa tu internet e intenta de nuevo.'); return; }
+  if (r.status===401){ vSetup('GitHub rechazó el token guardado (venció o lo revocaste). Pega uno nuevo.'); return; }
+  if (!r.ok){ vError(`GitHub respondió ${r.status} al abrir la app. Intenta de nuevo en un momento.`); return; }
+  const html=await r.text();
+  window.__FIN_T=token; window.__FIN_CFG=c;
+  document.open(); document.write(html); document.close();
+}
+
+function vBloqueo(auto){
   const seg=S.cfg.seg; const conBio=!!seg.bio;
   const k = teclado({titulo:'Ingresa tu clave', sub: conBio?`O toca la cara para usar ${BIO}.`:'', n:seg.pin.n, conBio,
     pie:`<button class="link" id="kOlvide">¿Olvidaste tu clave?</button>`,
     alCompletar: async (pin, fallo)=>{
       const it=intentos();
       if (it.hasta>Date.now()){ fallo(`Demasiados intentos. Espera ${Math.ceil((it.hasta-Date.now())/1000)} segundos.`); return; }
-      try{ const llave=await SEG.llavePin(pin, SEG.deb64u(seg.pin.salt)); S.cfg.token=await SEG.descifrar(llave, seg.pin); }
+      let t;
+      try{ const llave=await SEG.llavePin(pin, SEG.deb64u(seg.pin.salt)); t=await SEG.descifrar(llave, seg.pin); }
       catch(e){ const n=it.n+1; store.set('fin.intentos', {n, hasta: n>=5 ? Date.now()+30000*(n-4) : 0});
         fallo(n>=5?'Clave incorrecta. Espera 30 segundos.':'Clave incorrecta'); return; }
-      store.set('fin.intentos', {n:0, hasta:0}); entrar();
+      store.set('fin.intentos', {n:0, hasta:0}); document.onkeydown=null; abrir(t);
     }});
-  const usarBio=async(silencioso)=>{ try{ k.msg(''); S.cfg.token=await tokenConBio(); store.set('fin.intentos',{n:0,hasta:0}); entrar(); }
+  const usarBio=async(silencioso)=>{ try{ k.msg(''); const t=await tokenConBio(); store.set('fin.intentos',{n:0,hasta:0}); document.onkeydown=null; abrir(t); }
     catch(e){ if(!silencioso) k.msg(errorBio(e), true); } };
   if ($('#kBio')) $('#kBio').onclick=()=>usarBio(false);
   $('#kOlvide').onclick=async()=>{ if(!confirm('Se borrará el acceso guardado en este teléfono. Para entrar de nuevo tendrás que pegar tu token de GitHub (o crear uno nuevo). ¿Continuar?')) return;
-    await SEG.idbDel('bio'); const {owner,repo,branch}=S.cfg; S.cfg={owner,repo,branch}; localStorage.removeItem('fin.cfg'); S.bloqueado=false; vSetup(); };
-  if (conBio && alAbrir) usarBio(true);
-}
-async function entrar(){
-  S.bloqueado=false; document.onkeydown=null;
-  if (S.data){ render(); try{ await cargar(); render(); }catch(e){} return; }
-  $('#app').innerHTML='<div class="setup"><div class="empty">Cargando tus finanzas…</div></div>';
-  try{ await cargar(); render(); }catch(e){ if(/401|403/.test(e.message)) vSetup('GitHub rechazó el token guardado (venció o lo revocaste). Pega uno nuevo.'); else { toast(e.message,6000); vBloqueo(); } }
-}
-function bloquear(){ if (S.cfg?.seg?.pin) vBloqueo(); }
-/* Bloqueo automático al volver a la app después de un rato */
-document.addEventListener('visibilitychange', ()=>{
-  if (!S.cfg?.seg?.pin || S.demo) return;
-  if (document.hidden){ S.ocultoDesde=Date.now(); if ((S.cfg.seg.auto??2)===0 && !S.bloqueado) vBloqueo(); return; }
-  if (!S.bloqueado && S.ocultoDesde && Date.now()-S.ocultoDesde > (S.cfg.seg.auto??2)*60000) vBloqueo(true);
-});
-function vSeguridad(){
-  const seg=S.cfg?.seg||{};
-  return `${volver}<h1>Seguridad</h1><div class="sub">Tu token de GitHub queda cifrado en este teléfono; sin tu clave o tu ${BIO} no se puede usar.</div>
-  <div class="card"><h2>Clave</h2><div class="sub">${seg.pin?`Tienes una clave de ${seg.pin.n} dígitos.`:'Aún no tienes clave.'}</div>
-    <button class="btn sec" id="sgClave">${seg.pin?'Cambiar clave':'Crear clave'}</button>
-    ${seg.pin?'<button class="btn sec" id="sgLock">Bloquear ahora</button>':''}</div>
-  <div class="card"><h2>${BIO}</h2><div class="sub" id="sgBioInfo">${seg.bio?`Activado${seg.bio.modo==='prf'?' (la llave la entrega el teléfono solo con tu cara)':''}.`:'No está activado.'}</div>
-    <button class="btn ${seg.bio?'danger':''}" id="sgBio">${seg.bio?'Desactivar '+BIO:'Activar '+BIO}</button></div>
-  <div class="card"><h2>Bloqueo automático</h2><div class="sub">Pedir la clave al volver a la app después de:</div>
-    <div class="seg" style="margin-top:8px">${AUTO_OPC.map(([v,l])=>`<button data-auto="${v}" class="${(seg.auto??2)===v?'on':''}">${l}</button>`).join('')}</div></div>`;
-}
-function wireSeguridad(){
-  if (!$('#sgClave')) return;
-  $('#sgClave').onclick=()=>{ S.bloqueado=true; teclado({titulo:'Nueva clave', sub:'Elige entre 4 y 8 dígitos y toca Listo.', alCompletar: async pin=>{
-      teclado({titulo:'Repite la nueva clave', n:pin.length, alCompletar: async (pin2, fallo)=>{
-        if(pin2!==pin){ fallo('No coincide.'); setTimeout(()=>{ S.bloqueado=false; render(); },900); return; }
-        await fijarClave(pin); S.bloqueado=false; document.onkeydown=null; render(); toast('Clave actualizada'); }}); }});
-    const pie=document.createElement('button'); pie.className='link'; pie.textContent='Cancelar'; pie.onclick=()=>{ S.bloqueado=false; document.onkeydown=null; render(); }; $('.lock').appendChild(pie); };
-  if ($('#sgLock')) $('#sgLock').onclick=bloquear;
-  $('#sgBio').onclick=async()=>{
-    if (S.cfg.seg?.bio){ if(!confirm(`¿Desactivar ${BIO}?`)) return; delete S.cfg.seg.bio; await SEG.idbDel('bio'); guardarCfg(); render(); toast(BIO+' desactivado'); return; }
-    if (!S.cfg.seg?.pin){ toast('Primero crea una clave'); return; }
-    if (!(await SEG.bioDisponible())){ toast(`Este navegador no permite ${BIO} en páginas web. Sigue usando tu clave.`,6000); return; }
-    try{ await activarBio(); render(); toast(BIO+' activado'); }catch(e){ toast(errorBio(e),6000); } };
-  document.querySelectorAll('[data-auto]').forEach(b=>b.onclick=()=>{ S.cfg.seg.auto=+b.dataset.auto; guardarCfg(); render(); });
+    await SEG.idbDel('bio'); const {owner,repo,branch}=S.cfg; S.cfg={owner,repo,branch}; localStorage.removeItem('fin.cfg'); vSetup(); };
+  if (conBio && auto) usarBio(true);
 }
 
-/* ═══════════════════ Configuración inicial ═══════════════════ */
 function vSetup(err){
-  const c=S.cfg||{owner:'fagarciafo',repo:'gastos',branch:'main',token:''};
+  const c=S.cfg||{owner:location.hostname.split('.')[0],repo:'gastos',branch:'main'};
   $('#app').innerHTML=`<div class="setup"><div class="brand" style="margin-bottom:14px"><div class="logo">${ICON.logo}</div><span style="font-size:20px">Mis finanzas</span></div>
-  <div class="card"><h2>Conecta tu repositorio</h2><div class="sub">Los datos viven en tu repositorio privado de GitHub. Esta página no guarda nada en ningún servidor: el token queda solo en este dispositivo.</div>
+  <div class="card"><h2>Conecta tu repositorio</h2><div class="sub">Los datos y la app viven en tu repositorio privado de GitHub. Esta página no guarda nada en ningún servidor: el token queda solo en este dispositivo.</div>
   ${err?`<div class="note neg">${esc(err)}</div>`:''}
   <div class="row2"><div><label class="f">Usuario u organización</label><input class="inp" id="sOwner" value="${esc(c.owner)}" placeholder="tu-usuario"></div>
   <div><label class="f">Repositorio</label><input class="inp" id="sRepo" value="${esc(c.repo)}"></div></div>
-  <label class="f">Token de acceso (fine-grained)</label><input class="inp" id="sTok" type="password" value="${esc(c.token||'')}" placeholder="github_pat_…" autocomplete="off">
+  <label class="f">Token de acceso (fine-grained)</label><input class="inp" id="sTok" type="password" value="" placeholder="github_pat_…" autocomplete="off">
   <button class="btn" id="sGo">Entrar</button>
   <ol><li>En GitHub: Settings → Developer settings → Fine-grained tokens → Generate new token.</li><li>Repository access: solo el repositorio de finanzas.</li><li>Permisos: <b>Contents</b> lectura y escritura, <b>Actions</b> lectura y escritura.</li></ol></div></div>`;
-  $('#sGo').onclick=async()=>{ S.cfg={owner:$('#sOwner').value.trim(),repo:$('#sRepo').value.trim(),branch:'main',token:$('#sTok').value.trim()};
-    $('#sGo').disabled=true; $('#sGo').textContent='Conectando…';
-    try{ await cargar(); vCrearClave(); }catch(e){ vSetup(e.message); } };
+  $('#sGo').onclick=()=>{ const t=$('#sTok').value.trim(); if(!t){ toast('Pega tu token'); return; }
+    S.cfg={owner:$('#sOwner').value.trim(),repo:$('#sRepo').value.trim(),branch:'main'}; abrir(t); };
 }
+
 function aplicarTema(){ const t=store.get('fin.tema','auto'); if(t==='auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme',t); }
 
-(async function init(){
-  aplicarTema();
-  if (window.FIN_DEMO){ await cargar(); render(); return; }
-  if (S.cfg?.seg?.pin){ vBloqueo(true); return; }
-  if (!S.cfg?.token){ vSetup(); return; }
-  // Instalación anterior: el token estaba guardado sin cifrar. Se pide crear la clave.
-  $('#app').innerHTML='<div class="setup"><div class="empty">Cargando tus finanzas…</div></div>';
-  try{ await cargar(); vCrearClave(true); }catch(e){ vSetup(e.message); }
+function inicio(auto){
+  S.cfg=store.get('fin.cfg', null);
+  if (S.cfg?.seg?.pin){ vBloqueo(auto); return; }
+  if (S.cfg?.token){ abrir(S.cfg.token); return; }   // instalación anterior con token sin cifrar
+  vSetup();
+}
+aplicarTema();
+inicio(true);
 })();
 </script>
 </body>
