@@ -52,7 +52,7 @@ const Exp = (function () {
     const th = head.getElementsByTagNameNS(W, 'tblHeader')[0];
     if (th) val(th, 1); // el encabezado se repite en cada página
     rows.slice(1).forEach(r => tbl.removeChild(r));
-    const vacias = filas.length ? 2 : 11; // 2 filas libres para anotar a mano (11 si se pide el formato vacío)
+    const vacias = encabezado && encabezado.vacias != null ? encabezado.vacias : filas.length ? 2 : 11; // 2 filas libres para anotar a mano (11 si se pide el formato vacío)
     filas.concat(Array.from({ length: vacias }, () => [])).forEach(f => {
       const tr = modelo.cloneNode(true);
       hijos(tr, 'tc').forEach((tc, i) => {
@@ -131,118 +131,202 @@ const Exp = (function () {
     return z.generateAsync({ type: 'blob', mimeType: MIME, compression: 'DEFLATE' });
   }
 
-  /* ---------- 3. Cuestionario 6-PAQ ---------- */
-  function paq(d) {
-    let b = P('Cuestionario de Aceptación Parental (6-PAQ)', { style: 'Title' });
-    b += P('Versión en español (Flujas-Contreras, García-Palacios y Gómez, 2020)', { i: true, color: '667085', after: 200 });
-    if (d.nino) b += KV('Niño(a)', d.nino);
-    b += KV('Responde', d.quien || '—') + KV('Fecha', d.fecha);
-    b += P(d.instrucciones, { before: 160, sz: 21 });
-    b += P('1 = Muy en desacuerdo / nunca   ·   2 = En desacuerdo / poco frecuente   ·   3 = De acuerdo / con frecuencia   ·   4 = Muy de acuerdo / siempre', { sz: 19, color: '444C5C' });
+  /* ---------- 3. Modelo de bloques (sirve para Word y PDF) ---------- */
+  // Tipos: title, sub, h1, h2, p, bul, kv, table
+  function aDocx(bl) {
+    let b = '';
+    bl.forEach(k => {
+      switch (k.t) {
+        case 'title': b += P(k.x, { style: 'Title' }); break;
+        case 'sub': b += P(k.x, { i: !!k.italic, color: k.muted ? '667085' : '444C5C', sz: k.small ? 19 : undefined, after: k.after != null ? k.after : 60 }); break;
+        case 'h1': b += H1(k.x); break;
+        case 'h2': b += H2(k.x); break;
+        case 'p': b += k.small ? P(k.x, { sz: 18, color: '667085', before: k.before || 0, after: 120 }) : P(k.x); break;
+        case 'bul': b += Bul(k.x); break;
+        case 'kv': b += KV(k.k, k.v); break;
+        case 'table': b += T(k.rows, { widths: k.widths, align: k.align || [], sz: k.sz || 20 }); break;
+      }
+    });
+    return empaquetar(b);
+  }
+
+  /* ---------- 4. PDF (jsPDF, se carga solo cuando se necesita) ---------- */
+  let pdfListo = null;
+  function cargarScript(src) {
+    return new Promise((ok, mal) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => mal(new Error('No se pudo cargar ' + src + '. Revisa la conexión e inténtalo de nuevo.')); document.head.appendChild(s); });
+  }
+  function cargarPdf() {
+    if (!pdfListo) pdfListo = cargarScript('vendor/jspdf.umd.min.js').then(() => cargarScript('vendor/jspdf.plugin.autotable.min.js')).catch(e => { pdfListo = null; throw e; });
+    return pdfListo;
+  }
+  const AT = (doc, o) => (typeof window.autoTable === 'function' ? window.autoTable(doc, o) : doc.autoTable(o));
+  // Las fuentes estándar del PDF usan WinAnsi: se reemplazan los caracteres que no existen allí.
+  const pt = s => String(s ?? '').replace(/−/g, '-').replace(/→/g, '->').replace(/≥/g, '>=').replace(/≤/g, '<=')
+    .replace(/[^\n\x20-\x7E\xA0-\xFF€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]/g, '');
+  const C = { tinta: [29, 36, 51], gris: [102, 112, 133], gris2: [68, 76, 92], azul: [47, 95, 179], azulOsc: [31, 63, 122], cab: [201, 218, 248], borde: [191, 200, 216] };
+  function pies(doc, texto) {
+    const n = doc.getNumberOfPages(), W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+    for (let i = 1; i <= n; i++) {
+      doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...C.gris);
+      if (texto) doc.text(pt(texto), 10, H - 6);
+      doc.text(`Página ${i} de ${n}`, W - 10, H - 6, { align: 'right' });
+    }
+  }
+  async function aPdf(bl, { pie = '' } = {}) {
+    await cargarPdf();
+    const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+    const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 18, ancho = W - 2 * M;
+    let y = M;
+    const salto = h => { if (y + h > H - 16) { doc.addPage(); y = M; } };
+    const fuente = (size, estilo, color) => { doc.setFont('helvetica', estilo || 'normal'); doc.setFontSize(size); doc.setTextColor(...(color || C.tinta)); };
+    const texto = (t, { size = 10.5, estilo = 'normal', color, ind = 0, after = 2 } = {}) => {
+      fuente(size, estilo, color);
+      const lh = size * 0.3528 * 1.35;
+      doc.splitTextToSize(pt(t), ancho - ind).forEach(l => { salto(lh); doc.text(l, M + ind, y + size * 0.3528); y += lh; });
+      y += after;
+    };
+    for (const k of bl) {
+      switch (k.t) {
+        case 'title': texto(k.x, { size: 19, estilo: 'bold', color: C.azulOsc, after: 1.5 }); break;
+        case 'sub': texto(k.x, { size: k.small ? 8.5 : 10, estilo: k.italic ? 'italic' : 'normal', color: k.muted ? C.gris : C.gris2, after: k.after != null ? k.after / 40 : 1.5 }); break;
+        case 'h1': y += 4; salto(34); texto(k.x, { size: 14, estilo: 'bold', color: C.azul, after: 2 }); break;
+        case 'h2': y += 2; salto(28); texto(k.x, { size: 11.5, estilo: 'bold', after: 1.5 }); break;
+        case 'p': if (k.before) y += k.before / 40; texto(k.x, k.small ? { size: 8.5, color: C.gris } : {}); break;
+        case 'bul': {
+          fuente(10.5, 'normal'); const lh = 10.5 * 0.3528 * 1.35;
+          doc.splitTextToSize(pt(k.x), ancho - 6).forEach((l, i) => { salto(lh); if (i === 0) doc.text('•', M + 1.5, y + 3.7); doc.text(l, M + 6, y + 3.7); y += lh; });
+          y += 1; break;
+        }
+        case 'kv': {
+          fuente(10.5, 'bold'); const kw = doc.getTextWidth(pt(k.k) + ': ');
+          fuente(10.5, 'normal'); const vl = doc.splitTextToSize(pt(k.v), ancho - kw); const lh = 10.5 * 0.3528 * 1.35;
+          vl.forEach((l, i) => { salto(lh); if (i === 0) { fuente(10.5, 'bold'); doc.text(pt(k.k) + ': ', M, y + 3.7); fuente(10.5, 'normal'); } doc.text(l, M + kw, y + 3.7); y += lh; });
+          y += 1; break;
+        }
+        case 'table': {
+          const tot = k.widths.reduce((a, b) => a + b, 0), al = k.align || [];
+          const cs = {}; k.widths.forEach((w, i) => { cs[i] = { cellWidth: w / tot * ancho, halign: al[i] || 'left' }; });
+          salto(22); // evita dejar el encabezado de la tabla solo al final de la página
+          AT(doc, {
+            startY: y, head: [k.rows[0].map(pt)], body: k.rows.slice(1).map(r => r.map(pt)), theme: 'grid',
+            margin: { left: M, right: M, top: M, bottom: 16 }, showHead: 'everyPage', rowPageBreak: 'avoid',
+            styles: { font: 'helvetica', fontSize: (k.sz || 20) <= 18 ? 7.5 : 8.5, cellPadding: 1.5, lineColor: C.borde, lineWidth: 0.2, textColor: C.tinta, valign: 'top', overflow: 'linebreak' },
+            headStyles: { fillColor: C.cab, textColor: C.tinta, fontStyle: 'bold' }, columnStyles: cs
+          });
+          y = doc.lastAutoTable.finalY + 4; break;
+        }
+      }
+    }
+    pies(doc, pie);
+    return doc.output('blob');
+  }
+
+  async function registroPadresPdf(filas, encabezado) {
+    await cargarPdf();
+    const doc = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const M = 10, ancho = doc.internal.pageSize.getWidth() - 2 * M;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(0, 0, 0);
+    doc.text(pt(encabezado.titulo), M, 14);
+    if (encabezado.detalle) { const tw = doc.getTextWidth(pt(encabezado.titulo)); doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(pt(encabezado.detalle), M + tw + 5, 14); }
+    const grid = [825, 2145, 2340, 2010, 2115, 1815, 2190, 2685], tot = grid.reduce((a, b) => a + b, 0);
+    const cs = {}; grid.forEach((g, i) => { cs[i] = { cellWidth: g / tot * ancho }; });
+    const head = [['Fecha', 'Situación\n¿Qué pasó antes?', 'Conducta inadecuada\n¿Qué hizo mi hijo?', 'Función\n¿Para qué lo hizo?', '¿Qué sentí?\nEmociones y sensaciones físicas', '¿Qué pensé?\nImágenes, recuerdos, etc.', '¿Qué hice o dejé de hacer?', '¿Qué ocurrió después?\nReacciones del entorno o de mi hijo, cambios en sensaciones, etc.']];
+    const vacias = encabezado.vacias != null ? encabezado.vacias : (filas.length ? 2 : 11);
+    const body = filas.map(f => f.map(pt)).concat(Array.from({ length: vacias }, () => Array(8).fill('')));
+    AT(doc, {
+      startY: 18, head: head.map(r => r.map(pt)), body, theme: 'grid', showHead: 'everyPage', columnStyles: cs,
+      margin: { left: M, right: M, top: 12, bottom: 12 },
+      styles: { font: 'helvetica', fontSize: 7.8, cellPadding: 1.4, lineColor: [0, 0, 0], lineWidth: 0.2, textColor: [0, 0, 0], valign: 'top', overflow: 'linebreak' },
+      headStyles: { fillColor: C.cab, textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', valign: 'middle', fontSize: 8 },
+      didParseCell: d => { if (d.section === 'body' && d.row.index >= filas.length) d.cell.styles.minCellHeight = 16; }
+    });
+    pies(doc, 'Formato registro padres');
+    return doc.output('blob');
+  }
+
+  /* ---------- 5. Contenido: Cuestionario 6-PAQ ---------- */
+  function bloquesPaq(d) {
+    const bl = [
+      { t: 'title', x: 'Cuestionario de Aceptación Parental (6-PAQ)' },
+      { t: 'sub', x: 'Versión en español (Flujas-Contreras, García-Palacios y Gómez, 2020)', italic: true, muted: true, after: 200 }
+    ];
+    if (d.nino) bl.push({ t: 'kv', k: 'Niño(a)', v: d.nino });
+    bl.push({ t: 'kv', k: 'Responde', v: d.quien || '—' }, { t: 'kv', k: 'Fecha', v: d.fecha });
+    bl.push({ t: 'p', x: d.instrucciones });
+    bl.push({ t: 'p', small: true, x: '1 = Muy en desacuerdo / nunca   ·   2 = En desacuerdo / poco frecuente   ·   3 = De acuerdo / con frecuencia   ·   4 = Muy de acuerdo / siempre' });
     const rows = [['#', 'Afirmación', '1', '2', '3', '4']];
     d.items.forEach((t, i) => { const v = d.respuestas[i]; rows.push([String(i + 1), t, v === 1 ? 'X' : '', v === 2 ? 'X' : '', v === 3 ? 'X' : '', v === 4 ? 'X' : '']); });
-    b += T(rows, { widths: [450, 6738, 600, 600, 600, 650], align: ['center', '', 'center', 'center', 'center', 'center'] });
-    b += H1('Resultado');
-    b += KV('Puntaje total de inflexibilidad', `${d.total} (rango 16 a 64; más bajo = más flexibilidad psicológica)`);
-    b += P(d.interpretacion);
+    bl.push({ t: 'table', rows, widths: [450, 6738, 600, 600, 600, 650], align: ['center', 'left', 'center', 'center', 'center', 'center'] });
+    bl.push({ t: 'h1', x: 'Resultado' });
+    bl.push({ t: 'kv', k: 'Puntaje total de inflexibilidad', v: `${d.total} (rango 16 a 64; más bajo = más flexibilidad psicológica)` });
+    bl.push({ t: 'p', x: d.interpretacion });
     if (d.aConversar && d.aConversar.length) {
-      b += H2('Afirmaciones para conversar con el equipo de psicología');
-      d.aConversar.forEach(t => { b += Bul(t); });
+      bl.push({ t: 'h2', x: 'Afirmaciones para conversar con el equipo de psicología' });
+      d.aConversar.forEach(x => bl.push({ t: 'bul', x }));
     }
-    if (d.nota) { b += H2('Observaciones'); b += P(d.nota); }
-    b += P('Cálculo: los ítems 1, 4, 8, 13 y 16 están redactados en sentido de flexibilidad y se invierten (5 − respuesta); luego se suman los 16 ítems. Referencia orientativa: media de 29,1 (DE 5,7) en la muestra española de validación. El instrumento no tiene puntos de corte clínicos; no es un diagnóstico.', { sz: 18, color: '667085', before: 240 });
-    return empaquetar(b);
+    if (d.nota) bl.push({ t: 'h2', x: 'Observaciones' }, { t: 'p', x: d.nota });
+    bl.push({ t: 'p', small: true, before: 240, x: 'Cálculo: los ítems 1, 4, 8, 13 y 16 están redactados en sentido de flexibilidad y se invierten (5 - respuesta); luego se suman los 16 ítems. Referencia orientativa: media de 29,1 (DE 5,7) en la muestra española de validación. El instrumento no tiene puntos de corte clínicos; no es un diagnóstico.' });
+    return bl;
   }
+  const paq = (d, formato = 'docx') => (formato === 'pdf' ? aPdf(bloquesPaq(d), { pie: 'Cuestionario 6-PAQ' }) : aDocx(bloquesPaq(d)));
 
-  /* ---------- 4. Informe de seguimiento ---------- */
-  const tablaConteo = (titulo, lista, total) => {
-    if (!lista || !lista.length) return '';
-    const rows = [[titulo, 'Veces', '%']].concat(lista.map(r => [r.t, String(r.n), total ? Math.round(r.n * 100 / total) + ' %' : '']));
-    return T(rows, { widths: [7038, 1300, 1300], align: ['', 'center', 'center'] });
-  };
-  function informe(r) {
-    let b = P('Informe de seguimiento familiar', { style: 'Title' });
-    b += P(`${r.nino ? r.nino + ' · ' : ''}Periodo: ${r.desdeTxt} a ${r.hastaTxt}`, { color: '444C5C', after: 60 });
-    b += P(`Elaborado el ${r.generadoTxt}${r.quien ? ' · Registros de: ' + r.quien : ''}`, { color: '667085', sz: 19, after: 200 });
-
+  /* ---------- 6. Contenido: Informe de seguimiento ---------- */
+  const conteo = (titulo, lista, total) => (!lista || !lista.length ? [] : [{
+    t: 'table', widths: [7038, 1300, 1300], align: ['left', 'center', 'center'],
+    rows: [[titulo, 'Veces', '%']].concat(lista.map(r => [r.t, String(r.n), total ? Math.round(r.n * 100 / total) + ' %' : '']))
+  }]);
+  function bloquesInforme(r) {
+    const bl = [
+      { t: 'title', x: 'Informe de seguimiento familiar' },
+      { t: 'sub', x: `${r.nino ? r.nino + ' · ' : ''}Periodo: ${r.desdeTxt} a ${r.hastaTxt}` },
+      { t: 'sub', x: `Elaborado el ${r.generadoTxt}${r.quien ? ' · Registros de: ' + r.quien : ''}`, muted: true, small: true, after: 200 }
+    ];
+    const add = (...xs) => xs.forEach(x => (Array.isArray(x) ? bl.push(...x) : bl.push(x)));
     const c = r.conductas;
-    b += H1('Conductas registradas');
-    if (!c.total) b += P('Sin registros de conducta en el periodo.');
+    add({ t: 'h1', x: 'Conductas registradas' });
+    if (!c.total) add({ t: 'p', x: 'Sin registros de conducta en el periodo.' });
     else {
-      b += Bul(`${c.total} registros en ${c.dias} días con registro (${c.porDia} por día con registro, en promedio).`);
-      if (c.intProm) b += Bul(`Intensidad promedio: ${c.intProm} de 5.`);
-      if (c.duraciones.length) b += Bul(`Duración más frecuente: ${c.duraciones[0].t}.`);
-      b += H2('Tipo de conducta'); b += tablaConteo('Conducta', c.tipos, c.total);
-      b += H2('Función probable (¿para qué lo hizo?)'); b += tablaConteo('Función', c.funciones, c.total);
-      b += H2('Situaciones que la antecedieron'); b += tablaConteo('Antecedente', c.antecedentes, c.total);
-      b += H2('Momento del día y lugar'); b += tablaConteo('Momento', c.momentos, c.total); b += tablaConteo('Lugar', c.lugares, c.total);
+      add({ t: 'bul', x: `${c.total} registros en ${c.dias} días con registro (${c.porDia} por día con registro, en promedio).` });
+      if (c.intProm) add({ t: 'bul', x: `Intensidad promedio: ${c.intProm} de 5.` });
+      if (c.duraciones.length) add({ t: 'bul', x: `Duración más frecuente: ${c.duraciones[0].t}.` });
+      add({ t: 'h2', x: 'Tipo de conducta' }, conteo('Conducta', c.tipos, c.total));
+      add({ t: 'h2', x: 'Función probable (¿para qué lo hizo?)' }, conteo('Función', c.funciones, c.total));
+      add({ t: 'h2', x: 'Situaciones que la antecedieron' }, conteo('Antecedente', c.antecedentes, c.total));
+      add({ t: 'h2', x: 'Momento del día y lugar' }, conteo('Momento', c.momentos, c.total), conteo('Lugar', c.lugares, c.total));
       if (c.acciones.length) {
-        b += H2('Lo que hicimos y lo que pasó después');
-        const rows = [['Respuesta del adulto', 'Veces', 'Se calmó / volvió a la actividad', 'Aumentó o se repitió', 'Obtuvo lo que buscaba']]
-          .concat(c.acciones.map(a => [a.t, String(a.n), String(a.calma), String(a.aumento), String(a.refuerzo)]));
-        b += T(rows, { widths: [3638, 1000, 1800, 1600, 1600] });
-        b += P('"Obtuvo lo que buscaba" incluye "consiguió lo que quería" y "evitó la tarea": son respuestas que pueden mantener la conducta en el tiempo.', { sz: 18, color: '667085' });
+        add({ t: 'h2', x: 'Lo que hicimos y lo que pasó después' }, {
+          t: 'table', widths: [3638, 1000, 1800, 1600, 1600], align: ['left', 'center', 'center', 'center', 'center'],
+          rows: [['Respuesta del adulto', 'Veces', 'Se calmó / volvió a la actividad', 'Aumentó o se repitió', 'Obtuvo lo que buscaba']].concat(c.acciones.map(a => [a.t, String(a.n), String(a.calma), String(a.aumento), String(a.refuerzo)]))
+        }, { t: 'p', small: true, x: '"Obtuvo lo que buscaba" incluye "consiguió lo que quería" y "evitó la tarea": son respuestas que pueden mantener la conducta en el tiempo.' });
       }
-      b += H1('Vivencia de los padres');
-      b += tablaConteo('Emoción', c.emociones, c.total);
-      b += tablaConteo('Sensación física', c.sensaciones, c.total);
-      b += tablaConteo('Pensamiento', c.pensamientos, c.total);
+      add({ t: 'h1', x: 'Vivencia de los padres' }, conteo('Emoción', c.emociones, c.total), conteo('Sensación física', c.sensaciones, c.total), conteo('Pensamiento', c.pensamientos, c.total));
     }
-
     const s = r.sueno;
-    b += H1('Sueño');
-    if (!s.noches) b += P('Sin registros de sueño en el periodo.');
+    add({ t: 'h1', x: 'Sueño' });
+    if (!s.noches) add({ t: 'p', x: 'Sin registros de sueño en el periodo.' });
     else {
-      b += Bul(`${s.noches} noches registradas · promedio ${s.promHorasTxt} de sueño · ${s.promDesp} despertares por noche.`);
-      if (s.obs.length) b += Bul('Observaciones nocturnas: ' + s.obs.map(o => `${o.t} (${o.n})`).join(', ') + '.');
-      b += T([['Fecha', 'Se acostó', 'Se durmió', 'Despertó', 'Horas', 'Despertares', 'Observaciones']].concat(s.filas),
-        { widths: [1150, 1000, 1000, 1000, 900, 1100, 3488], sz: 18 });
+      add({ t: 'bul', x: `${s.noches} noches registradas · promedio ${s.promHorasTxt} de sueño · ${s.promDesp} despertares por noche.` });
+      if (s.obs.length) add({ t: 'bul', x: 'Observaciones nocturnas: ' + s.obs.map(o => `${o.t} (${o.n})`).join(', ') + '.' });
+      add({ t: 'table', sz: 18, widths: [1150, 1000, 1000, 1000, 900, 1100, 3488], align: ['left', 'center', 'center', 'center', 'center', 'center', 'left'], rows: [['Fecha', 'Se acostó', 'Se durmió', 'Despertó', 'Horas', 'Despertares', 'Observaciones']].concat(s.filas) });
     }
-    const a = r.alim;
-    if (a.dias) {
-      b += H2('Alimentación');
-      b += tablaConteo('Cómo comió', a.como, a.dias);
-      if (a.obs.length) b += tablaConteo('Observación', a.obs, a.dias);
-    }
-    if (r.animoProm) b += P(R('Regulación / ánimo general promedio: ', { b: true }) + R(r.animoProm + ' de 5'));
-
-    b += H1('Terapias');
-    if (r.orden && (r.orden.prestador || r.orden.inicio)) {
-      b += P(`${r.orden.prestador ? 'Prestador: ' + r.orden.prestador + '. ' : ''}${r.orden.inicio ? 'Orden vigente del ' + r.orden.inicioTxt + ' al ' + (r.orden.finTxt || '—') + '.' : ''}`);
-    }
+    if (r.alim.dias) add({ t: 'h2', x: 'Alimentación' }, conteo('Cómo comió', r.alim.como, r.alim.dias), conteo('Observación', r.alim.obs, r.alim.dias));
+    if (r.animoProm) add({ t: 'kv', k: 'Regulación / ánimo general promedio', v: r.animoProm + ' de 5' });
+    add({ t: 'h1', x: 'Terapias' });
+    if (r.orden && (r.orden.prestador || r.orden.inicio)) add({ t: 'p', x: `${r.orden.prestador ? 'Prestador: ' + r.orden.prestador + '. ' : ''}${r.orden.inicio ? 'Orden vigente del ' + r.orden.inicioTxt + ' al ' + (r.orden.finTxt || '—') + '.' : ''}` });
     if (r.terapias.some(t => t.asistTotal || t.faltasPeriodo || t.ordenadas)) {
-      b += T([['Terapia', 'Ordenadas', 'Asistidas en el periodo', 'Faltas en el periodo', 'Asistidas acumuladas']]
-        .concat(r.terapias.map(t => [t.nombre, t.ordenadas || '—', String(t.asistPeriodo), String(t.faltasPeriodo), String(t.asistTotal)])),
-        { widths: [3238, 1400, 1700, 1600, 1700] });
-    } else b += P('Sin sesiones registradas.');
-    if (r.tareas.length) {
-      b += H2('Tareas para la casa recibidas');
-      r.tareas.forEach(t => { b += Bul(`${t.fecha} · ${t.terapia}: ${t.tarea}`); });
-    }
-
-    if (r.objetivos.length) {
-      b += H1('Objetivos y habilidades');
-      b += T([['Objetivo', 'Área', 'Primer registro', 'Último registro']]
-        .concat(r.objetivos.map(o => [o.nombre, o.area, o.inicial, o.actual])), { widths: [3638, 1700, 2150, 2150] });
-    }
-    if (r.paq.length) {
-      b += H1('Cuestionario 6-PAQ (flexibilidad parental)');
-      b += T([['Fecha', 'Responde', 'Puntaje total (16–64)']].concat(r.paq.map(p => [p.fecha, p.quien, String(p.total)])), { widths: [2500, 3638, 3500] });
-      b += P('Más bajo = más flexibilidad psicológica. Referencia orientativa: media 29,1 (DE 5,7) en la validación española.', { sz: 18, color: '667085' });
-    }
-    if (r.logros.length) {
-      b += H1('Logros y momentos positivos');
-      r.logros.forEach(l => { b += Bul(`${l.fecha}: ${l.texto}`); });
-    }
-    if (r.citas.length) {
-      b += H1('Próximas citas y pendientes');
-      r.citas.forEach(ci => { b += Bul(`${ci.fecha}${ci.hora ? ' ' + ci.hora : ''} · ${ci.tipo || 'Pendiente'}: ${ci.desc}`); });
-    }
-    b += P('Información registrada por los cuidadores en la aplicación de seguimiento familiar. No reemplaza la valoración del equipo tratante.', { sz: 18, color: '667085', before: 300 });
-    return empaquetar(b);
+      add({ t: 'table', widths: [3238, 1400, 1700, 1600, 1700], align: ['left', 'center', 'center', 'center', 'center'], rows: [['Terapia', 'Ordenadas', 'Asistidas en el periodo', 'Faltas en el periodo', 'Asistidas acumuladas']].concat(r.terapias.map(t => [t.nombre, t.ordenadas || '—', String(t.asistPeriodo), String(t.faltasPeriodo), String(t.asistTotal)])) });
+    } else add({ t: 'p', x: 'Sin sesiones registradas.' });
+    if (r.tareas.length) { add({ t: 'h2', x: 'Tareas para la casa recibidas' }); r.tareas.forEach(t => add({ t: 'bul', x: `${t.fecha} · ${t.terapia}: ${t.tarea}` })); }
+    if (r.objetivos.length) add({ t: 'h1', x: 'Objetivos y habilidades' }, { t: 'table', widths: [3638, 1700, 2150, 2150], rows: [['Objetivo', 'Área', 'Primer registro', 'Último registro']].concat(r.objetivos.map(o => [o.nombre, o.area, o.inicial, o.actual])) });
+    if (r.paq.length) add({ t: 'h1', x: 'Cuestionario 6-PAQ (flexibilidad parental)' }, { t: 'table', widths: [2500, 3638, 3500], align: ['left', 'left', 'center'], rows: [['Fecha', 'Responde', 'Puntaje total (16–64)']].concat(r.paq.map(p => [p.fecha, p.quien, String(p.total)])) }, { t: 'p', small: true, x: 'Más bajo = más flexibilidad psicológica. Referencia orientativa: media 29,1 (DE 5,7) en la validación española.' });
+    if (r.logros.length) { add({ t: 'h1', x: 'Logros y momentos positivos' }); r.logros.forEach(l => add({ t: 'bul', x: `${l.fecha}: ${l.texto}` })); }
+    if (r.citas.length) { add({ t: 'h1', x: 'Próximas citas y pendientes' }); r.citas.forEach(ci => add({ t: 'bul', x: `${ci.fecha}${ci.hora ? ' ' + ci.hora : ''} · ${ci.tipo || 'Pendiente'}: ${ci.desc}` })); }
+    add({ t: 'p', small: true, before: 300, x: 'Información registrada por los cuidadores en la aplicación de seguimiento familiar. No reemplaza la valoración del equipo tratante.' });
+    return bl;
   }
+  const informe = (r, formato = 'docx') => (formato === 'pdf' ? aPdf(bloquesInforme(r), { pie: 'Informe de seguimiento familiar' + (r.nino ? ' · ' + r.nino : '') }) : aDocx(bloquesInforme(r)));
 
-  /* ---------- 5. Compartir / descargar ---------- */
+  /* ---------- 7. Compartir / descargar ---------- */
   async function compartir(blob, nombre) {
     const file = new File([blob], nombre, { type: blob.type || 'application/octet-stream' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -258,5 +342,5 @@ const Exp = (function () {
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 5000);
   }
 
-  return { registroPadres, paq, informe, compartir, descargar, MIME };
+  return { registroPadres, registroPadresPdf, paq, informe, compartir, descargar, cargarPdf, MIME };
 })();

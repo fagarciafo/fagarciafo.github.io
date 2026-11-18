@@ -334,7 +334,7 @@
         <button data-go="#/dia/hoy"><span>🌙</span>Diario de hoy</button>
         <button data-go="#/sesion/nueva"><span>🗓️</span>Registrar sesión</button>
         <button data-go="#/paq"><span>📝</span>Cuestionario 6-PAQ</button>
-        <button data-go="#/exportar"><span>📄</span>Exportar a Word</button>
+        <button data-go="#/exportar"><span>📄</span>Exportar Word / PDF</button>
       </div>
       <div class="card"><h2>Últimos 14 días</h2>
         <div class="grid3"><div class="stat"><b>${an.total}</b><small>conductas registradas</small></div>
@@ -363,7 +363,7 @@
       let html = '', fecha = '';
       cs.forEach(c => { if (c.fecha !== fecha) { fecha = c.fecha; html += `<h3>${fLarga(c.fecha)}</h3>`; } html += itemConducta(c); });
       view('Registro de padres', seg + `
-        <div class="grid2" style="margin-bottom:12px"><button class="btn" data-go="#/conducta/nueva">＋ Nuevo registro</button><button class="btn sec" data-go="#/exportar">📄 Exportar Word</button></div>
+        <div class="grid2" style="margin-bottom:12px"><button class="btn" data-go="#/conducta/nueva">＋ Nuevo registro</button><button class="btn sec" data-go="#/exportar">📄 Word / PDF</button></div>
         <div class="card">${cs.length ? html : '<div class="empty">Sin registros todavía.<br>Cada registro llena una fila del <b>Formato registro padres</b>.</div>'}</div>`);
     } else {
       const desde = periodo ? addDays(hoy(), -periodo + 1) : null;
@@ -446,6 +446,8 @@
     const col = columnas(c);
     const nombres = ['Fecha', 'Situación · ¿Qué pasó antes?', 'Conducta · ¿Qué hizo mi hijo?', 'Función · ¿Para qué lo hizo?', '¿Qué sentí?', '¿Qué pensé?', '¿Qué hice o dejé de hacer?', '¿Qué ocurrió después?'];
     view('Registro', `<div class="card detail">${nombres.map((n, i) => `<div class="lbl">${n}</div><p>${esc(col[i]) || '<span class="muted">—</span>'}</p>`).join('')}</div>
+      <div class="card"><h2>Exportar este registro</h2>${botonesFmt('exp-uno', ` data-id="${c.id}"`)}</div>
+      <div id="resultado-export"></div>
       <div class="grid2"><button class="btn sec" data-go="#/conducta/${c.id}/editar">Editar</button><button class="btn danger" data-act="borrar" data-col="conductas" data-id="${c.id}" data-ret="#/conductas">Eliminar</button></div>`);
   }
   function columnas(c) {
@@ -591,7 +593,7 @@
       <div class="item" data-go="#/paq"><div class="t">📝 Cuestionario 6-PAQ</div><div class="s">Aceptación parental · 16 afirmaciones · puntaje e historial</div></div>
       <div class="item" data-go="#/objetivos"><div class="t">🎯 Objetivos y habilidades</div><div class="s">Avances en comunicación, autonomía, regulación…</div></div>
       <div class="item" data-go="#/guia"><div class="t">📘 Guía rápida</div><div class="s">Cómo llenar el registro, funciones de la conducta, flexibilidad para padres</div></div>
-      <div class="item" data-go="#/exportar"><div class="t">📄 Exportar e informes</div><div class="s">Formato registro padres, 6-PAQ e informe de seguimiento en Word</div></div>
+      <div class="item" data-go="#/exportar"><div class="t">📄 Exportar e informes</div><div class="s">Formato registro padres, 6-PAQ e informe de seguimiento en Word o PDF</div></div>
       <div class="item" data-go="#/respaldo"><div class="t">💾 Respaldo y datos</div><div class="s">Guardar copia, pasar datos a otro celular, combinar con el otro cuidador</div></div>
       <div class="item" data-go="#/ajustes"><div class="t">⚙️ Ajustes</div><div class="s">Nombre, cuidadores, orden y terapias</div></div>
     </div>
@@ -644,9 +646,9 @@
         ${prev ? `<p class="small"><b>Comparado con ${fF(prev.fecha)}:</b> ${paqTotal(prev.r)} → ${t} (${t < paqTotal(prev.r) ? 'mejoró la flexibilidad' : t > paqTotal(prev.r) ? 'subió la inflexibilidad' : 'sin cambio'}).</p>` : ''}
         <p class="small muted">Orientativo, no es un diagnóstico: el cuestionario no tiene puntos de corte clínicos. Los ítems 1, 4, 8, 13 y 16 se puntúan invertidos.</p></div>
       ${conversar.length ? `<div class="card"><h2>Para conversar en psicología familiar</h2><p class="small muted">Afirmaciones respondidas en la dirección de menor flexibilidad.</p>${conversar.map(x => `<div class="item" style="cursor:default"><div class="t small">${x.i + 1}. ${esc(x.it)}</div><div class="s">Respondiste: ${PAQ_ESC[p.r[x.i] - 1]}</div></div>`).join('')}</div>` : ''}
-      <div class="grid2"><button class="btn" data-act="exp-paq" data-id="${p.id}">📄 Word</button><button class="btn sec" data-go="#/paq/${p.id}/editar">Editar</button></div>
+      <div class="card"><h2>Exportar</h2>${botonesFmt('exp-paq', ` data-id="${p.id}"`)}</div>
       <div id="resultado-export"></div>
-      <button class="btn danger block" style="margin-top:10px" data-act="borrar" data-col="paq" data-id="${p.id}" data-ret="#/paq">Eliminar</button>`);
+      <div class="grid2"><button class="btn sec" data-go="#/paq/${p.id}/editar">Editar</button><button class="btn danger" data-act="borrar" data-col="paq" data-id="${p.id}" data-ret="#/paq">Eliminar</button></div>`);
   }
 
   /* ----- Objetivos ----- */
@@ -740,21 +742,28 @@
       <div class="card"><h2>Periodo</h2>
         <div class="grid2"><div>${lab('Desde')}${inp('desde', F.desde, 'date')}</div><div>${lab('Hasta')}${inp('hasta', F.hasta, 'date')}</div></div>
         ${lab('Registros de')}${chips('quien', ['Todos'].concat(S.perfil.cuidadores), F.quien, true)}</div>
-      <div class="card"><h2>📄 Formato registro padres</h2><p class="small muted">El mismo documento de Word de la psicóloga, con una fila por cada registro del periodo.</p>
-        <button class="btn block" data-act="exp-registro">Generar Word</button></div>
-      <div class="card"><h2>📊 Informe de seguimiento</h2><p class="small muted">Resumen para el equipo tratante: conductas y sus funciones, respuestas de los padres, sueño, alimentación, asistencia a terapias, objetivos, 6-PAQ y logros.</p>
-        <button class="btn block" data-act="exp-informe">Generar Word</button></div>
+      <div class="card"><h2>📄 Formato registro padres</h2><p class="small muted">El mismo formato de la psicóloga, con una fila por cada registro del periodo, en Word o en PDF.</p>
+        ${botonesFmt('exp-registro')}</div>
+      <div class="card"><h2>📊 Informe de seguimiento</h2><p class="small muted">Resumen para el equipo tratante, en Word o PDF: conductas y sus funciones, respuestas de los padres, sueño, alimentación, asistencia a terapias, objetivos, 6-PAQ y logros.</p>
+        ${botonesFmt('exp-informe')}</div>
       <div class="card"><h2>📝 Cuestionario 6-PAQ</h2>${S.paq.length ? `<select data-m="paqId">${S.paq.slice().sort((a, b) => b.fecha.localeCompare(a.fecha)).map(p => `<option value="${p.id}">${fF(p.fecha)} · ${esc(p.quien || '')} · ${paqTotal(p.r)} pts</option>`).join('')}</select>
-        <button class="btn block" style="margin-top:10px" data-act="exp-paq">Generar Word</button>` : '<p class="muted small">Aún no hay cuestionarios respondidos.</p>'}</div>
+        <div style="margin-top:10px">${botonesFmt('exp-paq')}</div>` : '<p class="muted small">Aún no hay cuestionarios respondidos.</p>'}</div>
       <div class="card"><h2>📈 Tabla para Excel</h2><p class="small muted">Todos los registros de conducta del periodo en formato CSV.</p><button class="btn sec block" data-act="exp-csv">Generar CSV</button></div>
       <div id="resultado-export"></div>`);
   }
+  const botonesFmt = (act, extra = '') => `<div class="grid2"><button class="btn" data-act="${act}" data-f="docx"${extra}>📄 Word</button><button class="btn" style="background:#b42318" data-act="${act}" data-f="pdf"${extra}>📕 PDF</button></div>`;
+  async function generando(b, fn) {
+    const t = b.innerHTML; b.disabled = true; b.innerHTML = 'Generando…';
+    try { await fn(); } catch (e) { alert('No se pudo generar el documento: ' + e.message); }
+    finally { b.disabled = false; b.innerHTML = t; }
+  }
+  const ext = f => (f === 'pdf' ? '.pdf' : '.docx');
   function mostrarResultado(blob, nombre, detalle) {
     LAST = { blob, nombre };
     const box = document.getElementById('resultado-export');
     const html = `<div class="card" style="border:2px solid var(--pri)"><h2>✅ Listo</h2><p class="small" style="margin-top:0"><b>${esc(nombre)}</b>${detalle ? '<br>' + esc(detalle) : ''}</p>
       <div class="grid2"><button class="btn" data-act="compartir">Compartir / Guardar</button><button class="btn sec" data-act="descargar">Descargar</button></div>
-      <p class="small muted" style="margin-bottom:0">En el iPhone, “Compartir” permite guardarlo en Drive o Archivos, o enviarlo por WhatsApp o correo.</p></div>`;
+      <p class="small muted" style="margin-bottom:0">En el iPhone, “Compartir” permite guardarlo en Drive o en Archivos, o enviarlo por WhatsApp o correo.</p></div>`;
     if (box) { box.innerHTML = html; box.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
   }
   const slug = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '');
@@ -794,7 +803,7 @@
         <div id="ters">${F.terapias.map((t, i) => `<div class="row" style="margin-bottom:8px"><div class="grow">${inp('terapias.' + i + '.nombre', t.nombre, 'text', 'Nombre')}</div><div style="width:92px">${inp('terapias.' + i + '.ordenadas', t.ordenadas, 'number', 'N.º', 'min="0" inputmode="numeric"')}</div><button class="btn sm ghost" data-act="quitar-terapia" data-i="${i}">✕</button></div>`).join('')}</div>
         <button class="btn sm sec" data-act="agregar-terapia">＋ Agregar terapia</button></div>
       <div class="sticky-actions"><button class="btn" data-act="guardar-ajustes">Guardar ajustes</button></div>
-      <p class="small muted" style="text-align:center;margin-top:20px">Versión 1.0 · Funciona sin internet una vez abierta.</p>`);
+      <p class="small muted" style="text-align:center;margin-top:20px">Versión 1.1 · Funciona sin internet una vez abierta.</p>`);
   }
 
   /* ================= Acciones ================= */
@@ -869,27 +878,41 @@
       if (!confirm('¿Eliminar este registro? No se puede deshacer.')) return;
       S[b.dataset.col] = S[b.dataset.col].filter(x => x.id !== b.dataset.id); save(); toast('Eliminado'); volver(b.dataset.ret);
     },
-    async 'exp-registro'() {
+    async 'exp-registro'(b) {
       if (F.desde > F.hasta) return alert('La fecha "desde" es posterior a "hasta".');
       const cs = filtroQuien(S.conductas.filter(c => enRango(c.fecha, F.desde, F.hasta)), F.quien).sort((a, b) => (a.fecha + a.hora).localeCompare(b.fecha + b.hora));
       if (!cs.length && !confirm('No hay registros en ese periodo. ¿Generar el formato vacío?')) return;
-      try {
-        const blob = await Exp.registroPadres(cs.map(columnas), { titulo: 'Formato registro padres', detalle: [S.perfil.nino ? 'Niño(a): ' + S.perfil.nino : '', 'Periodo: ' + fF(F.desde) + ' a ' + fF(F.hasta), F.quien !== 'Todos' ? 'Registra: ' + F.quien : ''].filter(Boolean).join('   ·   ') });
-        mostrarResultado(blob, `Formato registro padres${sufijo()} ${F.desde} a ${F.hasta}.docx`, cs.length + ' registros');
-      } catch (e) { alert('No se pudo generar el Word: ' + e.message); }
+      const f = b.dataset.f || 'docx';
+      const enc = { titulo: 'Formato registro padres', detalle: [S.perfil.nino ? 'Niño(a): ' + S.perfil.nino : '', 'Periodo: ' + fF(F.desde) + ' a ' + fF(F.hasta), F.quien !== 'Todos' ? 'Registra: ' + F.quien : ''].filter(Boolean).join('   ·   ') };
+      await generando(b, async () => {
+        const blob = f === 'pdf' ? await Exp.registroPadresPdf(cs.map(columnas), enc) : await Exp.registroPadres(cs.map(columnas), enc);
+        mostrarResultado(blob, `Formato registro padres${sufijo()} ${F.desde} a ${F.hasta}${ext(f)}`, cs.length + (cs.length === 1 ? ' registro' : ' registros'));
+      });
     },
-    async 'exp-informe'() {
+    async 'exp-uno'(b) {
+      const c = S.conductas.find(x => x.id === b.dataset.id); if (!c) return;
+      const f = b.dataset.f || 'pdf';
+      const enc = { titulo: 'Formato registro padres', detalle: [S.perfil.nino ? 'Niño(a): ' + S.perfil.nino : '', 'Registro del ' + fF(c.fecha) + (c.hora ? ' ' + c.hora : '')].filter(Boolean).join('   ·   '), vacias: 0 };
+      await generando(b, async () => {
+        const blob = f === 'pdf' ? await Exp.registroPadresPdf([columnas(c)], enc) : await Exp.registroPadres([columnas(c)], enc);
+        mostrarResultado(blob, `Registro${sufijo()} ${c.fecha} ${(c.hora || '').replace(':', 'h')}${ext(f)}`);
+      });
+    },
+    async 'exp-informe'(b) {
       if (F.desde > F.hasta) return alert('La fecha "desde" es posterior a "hasta".');
-      try { const blob = await Exp.informe(resumen(F.desde, F.hasta, F.quien)); mostrarResultado(blob, `Informe de seguimiento${sufijo()} ${F.desde} a ${F.hasta}.docx`); }
-      catch (e) { alert('No se pudo generar el informe: ' + e.message); }
+      const f = b.dataset.f || 'docx';
+      await generando(b, async () => {
+        const blob = await Exp.informe(resumen(F.desde, F.hasta, F.quien), f);
+        mostrarResultado(blob, `Informe de seguimiento${sufijo()} ${F.desde} a ${F.hasta}${ext(f)}`);
+      });
     },
     async 'exp-paq'(b) {
       const p = S.paq.find(x => x.id === (b.dataset.id || F.paqId)); if (!p) return;
-      const t = paqTotal(p.r);
-      try {
-        const blob = await Exp.paq({ nino: S.perfil.nino, quien: p.quien, fecha: fLarga(p.fecha), instrucciones: PAQ_INSTR, items: PAQ_ITEMS, respuestas: p.r, total: t, interpretacion: paqLectura(t), nota: p.nota, aConversar: PAQ_ITEMS.map((it, i) => ({ it, i })).filter(x => paqPuntos(x.i, p.r[x.i]) >= 3).map(x => `${x.i + 1}. ${x.it} — ${PAQ_ESC[p.r[x.i] - 1]}`) });
-        mostrarResultado(blob, `6-PAQ${sufijo()} ${slug(p.quien)} ${p.fecha}.docx`, 'Puntaje total: ' + t);
-      } catch (e) { alert('No se pudo generar el Word: ' + e.message); }
+      const t = paqTotal(p.r), f = b.dataset.f || 'docx';
+      await generando(b, async () => {
+        const blob = await Exp.paq({ nino: S.perfil.nino, quien: p.quien, fecha: fLarga(p.fecha), instrucciones: PAQ_INSTR, items: PAQ_ITEMS, respuestas: p.r, total: t, interpretacion: paqLectura(t), nota: p.nota, aConversar: PAQ_ITEMS.map((it, i) => ({ it, i })).filter(x => paqPuntos(x.i, p.r[x.i]) >= 3).map(x => `${x.i + 1}. ${x.it} — ${PAQ_ESC[p.r[x.i] - 1]}`) }, f);
+        mostrarResultado(blob, `6-PAQ${sufijo()} ${slug(p.quien)} ${p.fecha}${ext(f)}`, 'Puntaje total: ' + t);
+      });
     },
     'exp-csv'() {
       const cs = filtroQuien(S.conductas.filter(c => enRango(c.fecha, F.desde, F.hasta)), F.quien).sort((a, b) => (a.fecha + a.hora).localeCompare(b.fecha + b.hora));
