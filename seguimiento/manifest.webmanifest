@@ -1,0 +1,16 @@
+{
+  "name": "Seguimiento familiar",
+  "short_name": "Seguimiento",
+  "description": "Registro de conductas, diario, terapias y cuestionarios para el seguimiento en casa.",
+  "lang": "es-CO",
+  "start_url": "./#/inicio",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6fb",
+  "theme_color": "#2f5fb3",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
