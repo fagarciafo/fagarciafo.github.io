@@ -48,9 +48,12 @@ if [ -f .runner ]; then
   echo "   Este Mac ya estaba registrado."
 else
   open "$REPO_URL/settings/actions/runners/new?arch=arm64&os=osx" || true
-  echo "   Se abrió GitHub en el navegador. En la sección «Configure» copia el código largo"
-  echo "   que aparece después de  --token  (solo el código, sin --token)."
-  read -r -p "   Pega aquí ese código y pulsa Enter: " TOKEN < /dev/tty
+  echo "   Se abrió GitHub en el navegador. En la sección «Configure» copia la línea que empieza"
+  echo "   por ./config.sh (o solo el código largo que va después de --token)."
+  read -r -p "   Pégala aquí y pulsa Enter: " ENTRADA < /dev/tty
+  # Acepta la línea completa o solo el código
+  TOKEN=$(printf '%s' "$ENTRADA" | sed -E 's/^[[:space:]]+//; s/.*--token[[:space:]]+//; s/[[:space:]].*$//')
+  if [ -z "$TOKEN" ]; then echo "   No recibí ningún código. Vuelve a correr el instalador."; exit 1; fi
   ./config.sh --unattended --url "$REPO_URL" --token "$TOKEN" --name "$NOMBRE" --labels colegio --replace
 fi
 
