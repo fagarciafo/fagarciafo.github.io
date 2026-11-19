@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="f" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#23804a"/>
+      <stop offset="1" stop-color="#155c32"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#f)"/>
+  <!-- asta y bandera -->
+  <rect x="252" y="62" width="8" height="70" rx="4" fill="#f4d35e"/>
+  <path d="M260 66h52l-12 15 12 15h-52z" fill="#f4d35e"/>
+  <!-- frontón -->
+  <path d="M256 120 412 204H100z" fill="#fff"/>
+  <circle cx="256" cy="178" r="17" fill="#155c32"/>
+  <path d="M256 168v10l7 6" fill="none" stroke="#f4d35e" stroke-width="5" stroke-linecap="round"/>
+  <!-- cuerpo con columnas -->
+  <rect x="114" y="214" width="284" height="132" fill="#fff"/>
+  <rect x="140" y="232" width="30" height="96" rx="4" fill="#dcefe3"/>
+  <rect x="192" y="232" width="30" height="96" rx="4" fill="#dcefe3"/>
+  <rect x="290" y="232" width="30" height="96" rx="4" fill="#dcefe3"/>
+  <rect x="342" y="232" width="30" height="96" rx="4" fill="#dcefe3"/>
+  <path d="M236 346v-62a20 20 0 0 1 40 0v62z" fill="#155c32"/>
+  <rect x="96" y="346" width="320" height="18" rx="6" fill="#f4d35e"/>
+  <!-- iniciales -->
+  <text x="256" y="452" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-weight="700" font-size="84" letter-spacing="6" fill="#fff">RLL</text>
+</svg>
