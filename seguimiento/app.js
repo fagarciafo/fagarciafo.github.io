@@ -126,6 +126,53 @@
     S.meta.modificado = new Date().toISOString();
     try { localStorage.setItem(KEY, JSON.stringify(S)); }
     catch (e) { alert('No se pudo guardar en el celular: ' + e.message); }
+    programarSync();
+  }
+
+  /* ================= Conexión con «Registro con los niños» =================
+     La clave NO está en este archivo (el repositorio es público): se guarda solo en este celular. */
+  const CNX = 'seguimiento.registro.v1';
+  const REG_URL = 'https://script.google.com/macros/s/AKfycbzPJLamFAJyMBKkLWofmeh4Z05g4X3b55GGRiwL5tT6JwzbT7bOopfZSkDGYlQlY6o/exec';
+  function cnx() {
+    let c = {};
+    try { c = JSON.parse(localStorage.getItem(CNX)) || {}; } catch (e) { c = {}; }
+    if (!c.k) { try { const k = localStorage.getItem('k'); if (k) c.k = k; } catch (e) { } } // misma clave de la app «Con los niños»
+    if (!c.url) c.url = REG_URL;
+    return c;
+  }
+  function cnxGuardar(c) { try { localStorage.setItem(CNX, JSON.stringify(c)); } catch (e) { } }
+  let syncT = null, syncando = false;
+  function programarSync() {
+    const c = cnx(); if (!c.k || c.pausa) return;
+    clearTimeout(syncT); syncT = setTimeout(() => sincronizar(false), 6000);
+  }
+  async function llamarRegistro(accion, extra) {
+    const c = cnx();
+    if (!c.k) throw new Error('Falta conectar la app en Ajustes.');
+    const r = await fetch(c.url, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ k: c.k, accion }, extra || {})) });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'Respuesta inválida');
+    return j.r;
+  }
+  async function sincronizar(manual) {
+    if (syncando) return; if (!navigator.onLine) { if (manual) toast('Sin internet: se sincroniza cuando vuelva la conexión.'); return; }
+    syncando = true;
+    try {
+      const r = await llamarRegistro('seguimiento', { datos: S });
+      const c = cnx(); c.ultimo = new Date().toISOString(); c.error = ''; c.res = r; cnxGuardar(c);
+      if (manual) toast('Sincronizado: ' + r.sesiones + ' sesiones' + (r.registrosCreados ? ', ' + r.registrosCreados + ' registro(s) nuevo(s)' : ''));
+    } catch (e) {
+      const c = cnx(); c.error = e.message; cnxGuardar(c);
+      if (manual) toast('No se pudo sincronizar: ' + e.message);
+    } finally { syncando = false; if (manual && /^#\/(ajustes|respaldo|inicio)/.test(location.hash || '#/inicio')) render(); }
+  }
+  const cuando = t => { const d = new Date(t); return fCorta(iso(d)) + ' · ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+  function tarjetaSync() {
+    const c = cnx();
+    if (!c.k) return `<div class="notice info">Conecta esta app con <b>Registro con los niños</b> para guardar una copia diaria en tu Drive y llevar las terapias al registro. <a href="#/ajustes">Conectar ›</a></div>`;
+    return `<div class="card"><div class="row"><div class="grow"><b>☁️ Registro con los niños</b><div class="small muted">${c.ultimo ? 'Última sincronización: ' + cuando(c.ultimo) : 'Aún no se ha sincronizado'}${c.error ? '<br><span style="color:var(--bad)">Último intento falló: ' + esc(c.error) + '</span>' : ''}</div></div>
+      <button class="btn sm sec" data-act="sincronizar">Sincronizar</button></div></div>`;
   }
   const nRegistros = () => S.conductas.length + S.diario.length + S.sesiones.length + S.citas.length + S.paq.length + S.objetivos.length;
   const terapia = id => S.terapias.find(t => t.id === id) || { nombre: 'Terapia' };
@@ -306,7 +353,8 @@
     if (!S.perfil.nino) avisos.push(`<div class="notice info">Empieza en <b>Ajustes</b>: escribe el nombre del niño, quién usa este celular y las sesiones ordenadas de cada terapia. <a href="#/ajustes">Ir a Ajustes ›</a></div>`);
     const ios = /iphone|ipad|ipod/i.test(navigator.userAgent), standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
     if (!standalone && !S.meta.avisoInstalar) avisos.push(`<div class="notice info"><b>Instálala en tu pantalla de inicio</b> para usarla como app y proteger mejor los datos: ${ios ? 'en Safari toca <b>Compartir</b> → <b>Agregar a inicio</b>' : 'en el menú del navegador toca <b>Instalar app</b> o <b>Agregar a pantalla principal</b>'}. <a href="#" data-act="ocultar-instalar">Entendido</a></div>`);
-    const dr = S.meta.respaldo ? diffDays(S.meta.respaldo.slice(0, 10), hoy()) : null;
+    const ultR = [S.meta.respaldo ? S.meta.respaldo.slice(0, 10) : '', cnx().ultimo ? iso(new Date(cnx().ultimo)) : ''].sort().pop();
+    const dr = ultR ? diffDays(ultR, hoy()) : null; // la sincronización con Drive cuenta como respaldo
     if (nRegistros() > 0 && (dr == null || dr >= 7)) avisos.push(`<div class="notice">${dr == null ? 'Aún no has hecho un respaldo.' : `Tu último respaldo fue hace ${dr} días.`} Los datos viven solo en este celular. <a href="#/respaldo">Hacer respaldo ›</a></div>`);
     if (S.orden.fin) {
       const dd = diffDays(hoy(), S.orden.fin);
@@ -329,6 +377,7 @@
         <div style="font-size:21px;font-weight:750;margin-top:2px">${hora < 12 ? 'Buenos días' : hora < 19 ? 'Buenas tardes' : 'Buenas noches'}${S.perfil.quien ? ', ' + esc(S.perfil.quien) : ''}</div>
         <div class="small muted" style="margin-top:4px">Seguimiento de ${esc(nino())}</div></div>
       ${avisos.join('')}
+      ${tarjetaSync()}
       <div class="quick">
         <button class="main" data-go="#/conducta/nueva"><span>＋</span><div>Registrar una conducta<div class="small" style="opacity:.85;font-weight:500">Formato registro padres</div></div></button>
         <button data-go="#/dia/hoy"><span>🌙</span>Diario de hoy</button>
@@ -802,12 +851,41 @@
         <h3>Terapias y sesiones ordenadas</h3>
         <div id="ters">${F.terapias.map((t, i) => `<div class="row" style="margin-bottom:8px"><div class="grow">${inp('terapias.' + i + '.nombre', t.nombre, 'text', 'Nombre')}</div><div style="width:92px">${inp('terapias.' + i + '.ordenadas', t.ordenadas, 'number', 'N.º', 'min="0" inputmode="numeric"')}</div><button class="btn sm ghost" data-act="quitar-terapia" data-i="${i}">✕</button></div>`).join('')}</div>
         <button class="btn sm sec" data-act="agregar-terapia">＋ Agregar terapia</button></div>
+      <div class="card"><h2>☁️ Conexión con «Registro con los niños»</h2>
+        <p class="small muted">Al conectarla, cada cambio se envía a tu Drive (un respaldo por día en <i>1. Hijos › Seguimiento Juan Pablo</i>), a las pestañas «Seg.» de la hoja del registro, y cada sesión de terapia a la que asistió queda en el registro de ese día.</p>
+        ${cnx().k ? `<p class="small"><span class="tag ok">Conectada</span>${cnx().ultimo ? ' Última sincronización: ' + cuando(cnx().ultimo) : ''}</p>` : ''}
+        ${lab('Enlace de tu registro', 'Pega el enlace de «Completar registro» de cualquier correo del registro, o solo la clave que va después de ?k=')}
+        <input type="text" id="cnxLink" placeholder="https://script.google.com/…?k=…" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <div class="grid2" style="margin-top:10px"><button class="btn sm" data-act="conectar">${cnx().k ? 'Cambiar enlace' : 'Conectar'}</button><button class="btn sm sec" data-act="sincronizar">Sincronizar ahora</button></div>
+        ${cnx().k ? '<div class="grid2" style="margin-top:8px"><button class="btn sm ghost" data-act="recuperar">Recuperar desde Drive</button><button class="btn sm danger" data-act="desconectar">Desconectar</button></div>' : ''}</div>
       <div class="sticky-actions"><button class="btn" data-act="guardar-ajustes">Guardar ajustes</button></div>
-      <p class="small muted" style="text-align:center;margin-top:20px">Versión 1.1 · Funciona sin internet una vez abierta.</p>`);
+      <p class="small muted" style="text-align:center;margin-top:20px">Versión 1.2 · Funciona sin internet una vez abierta.</p>`);
   }
 
   /* ================= Acciones ================= */
   const ACT = {
+    'conectar'() {
+      const t = (document.getElementById('cnxLink') || {}).value || '';
+      let k = '', url = '';
+      const m = t.match(/[?&]k=([^&#\s]+)/);
+      if (m) { k = decodeURIComponent(m[1]); const u = t.match(/https:\/\/script\.google\.com\/macros\/s\/[^/?#\s]+\/exec/); if (u) url = u[0]; }
+      else if (/^[\w-]{12,}$/.test(t.trim())) k = t.trim();
+      if (!k) return toast('No encontré la clave: pega el enlace completo que termina en ?k=…');
+      const c = cnx(); c.k = k; if (url) c.url = url; c.pausa = false; cnxGuardar(c);
+      toast('Conectada. Sincronizando…'); sincronizar(true);
+    },
+    'sincronizar'() { if (!cnx().k) return toast('Primero conecta la app en Ajustes.'); toast('Sincronizando…'); sincronizar(true); },
+    'desconectar'(b) {
+      if (b.getAttribute('data-ok') !== '1') { b.setAttribute('data-ok', '1'); b.textContent = 'Toca otra vez para desconectar'; return; }
+      try { localStorage.removeItem(CNX); localStorage.removeItem('k'); } catch (e) { }
+      toast('Desconectada. Los datos siguen en este celular.'); render();
+    },
+    async 'recuperar'(b) {
+      if (b.getAttribute('data-ok') !== '1') { b.setAttribute('data-ok', '1'); b.textContent = 'Toca otra vez: combinar el último respaldo'; return; }
+      b.disabled = true; b.textContent = 'Recuperando…';
+      try { const r = await llamarRegistro('seguimientoRecuperar'); const n = combinar(r.datos); save(); toast(n + ' registro(s) recuperado(s) de «' + r.nombre + '»'); render(); }
+      catch (e) { toast('No se pudo recuperar: ' + e.message); b.disabled = false; b.textContent = 'Recuperar desde Drive'; }
+    },
     'ocultar-instalar'() { S.meta.avisoInstalar = true; save(); render(); },
     'seg-c'(b) { segConductas = b.dataset.v; render(); },
     periodo(b) { periodo = Number(b.dataset.v); render(); },
@@ -994,4 +1072,6 @@
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => { });
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });
   render();
+  setTimeout(() => { const c = cnx(); if (c.k && (!c.ultimo || Date.now() - Date.parse(c.ultimo) > 6 * 36e5)) sincronizar(false); }, 3000);
+  window.addEventListener('online', programarSync);
 })();
