@@ -159,15 +159,49 @@
     if (syncando) return; if (!navigator.onLine) { if (manual) toast('Sin internet: se sincroniza cuando vuelva la conexión.'); return; }
     syncando = true;
     try {
-      const r = await llamarRegistro('seguimiento', { datos: S });
+      // Las sesiones que vinieron del registro no se devuelven (ya están allá).
+      const r = await llamarRegistro('seguimiento', { datos: Object.assign({}, S, { sesiones: S.sesiones.filter(x => x.origen !== 'registro') }) });
+      let traidas = 0;
+      try { traidas = await traerDeRegistro(); } catch (e) { /* si falla, se intenta en la próxima sincronización */ }
       const c = cnx(); c.ultimo = new Date().toISOString(); c.error = ''; c.res = r; cnxGuardar(c);
-      if (manual) toast('Sincronizado: ' + r.sesiones + ' sesiones' + (r.registrosCreados ? ', ' + r.registrosCreados + ' registro(s) nuevo(s)' : ''));
+      if (manual) toast('Sincronizado' + (traidas ? ': ' + traidas + ' sesión(es) traída(s) del registro' : '') + (r.registrosCreados ? (traidas ? ' y ' : ': ') + r.registrosCreados + ' registro(s) nuevo(s) allá' : '') + '.');
+      if (traidas && /^#\/(terapias|inicio)/.test(location.hash || '#/inicio')) render();
     } catch (e) {
       const c = cnx(); c.error = e.message; cnxGuardar(c);
       if (manual) toast('No se pudo sincronizar: ' + e.message);
     } finally { syncando = false; if (manual && /^#\/(ajustes|respaldo|inicio)/.test(location.hash || '#/inicio')) render(); }
   }
   const cuando = t => { const d = new Date(t); return fCorta(iso(d)) + ' · ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+  /* Terapias anotadas en «Registro con los niños» (con su app o desde el calendario) → sesiones aquí. */
+  const sinT = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  async function traerDeRegistro() {
+    const lista = await llamarRegistro('lista', { todo: false });
+    const hoyS = hoy();
+    const ya = new Set(S.sesiones.map(x => x.regId).filter(Boolean));
+    const ign = new Set(S.meta.regIgnorados || []);
+    const cand = (lista || []).filter(v => v.estado === 'Completo' && v.hasta <= hoyS && v.desde >= '2026-10-01' &&
+      /terapia|fono|ocupacional|psicolog|lenguaje|\baba\b/.test(sinT(v.titulo)) && !ya.has(v.id) && !ign.has(v.id));
+    let n = 0;
+    for (const v of cand) {
+      const d = await llamarRegistro('cargar', { id: v.id });
+      if (d.origen === 'Seguimiento') { (S.meta.regIgnorados = S.meta.regIgnorados || []).push(v.id); continue; }
+      const t = sinT([d.titulo, d.actividades, d.novedades].join(' '));
+      const ids = [];
+      if (/fono|lenguaje/.test(t)) ids.push('fono');
+      if (/ocupacional/.test(t)) ids.push('to');
+      if (/psicolog/.test(t)) ids.push(/famil/.test(t) ? 'psifam' : 'psi');
+      if (!ids.length) ids.push(S.terapias[0] ? S.terapias[0].id : 'terapia');
+      ids.forEach(tid => {
+        S.sesiones.push({ id: 'reg-' + v.id + '-' + tid, regId: v.id, origen: 'registro', fecha: d.desde, terapia: tid, asistio: 'si', motivo: '',
+          trabajaron: d.actividades || '', tarea: '', como: '',
+          obs: 'Traída de «Registro con los niños»' + (d.quien ? ' · Acompañó: ' + d.quien : '') + (d.lugares ? ' · ' + d.lugares : ''),
+          editado: new Date().toISOString() });
+        n++;
+      });
+    }
+    if (n || cand.length) save();
+    return n;
+  }
   function tarjetaSync() {
     const c = cnx();
     if (!c.k) return `<div class="notice info">Conecta esta app con <b>Registro con los niños</b> para guardar una copia diaria en tu Drive y llevar las terapias al registro. <a href="#/ajustes">Conectar ›</a></div>`;
