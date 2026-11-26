@@ -697,10 +697,11 @@
     const c = cnx();
     const subidas = (S.meta.ordenes || []).slice(-10).reverse();
     view('Subir órdenes médicas', `
-      <div class="card"><p class="small" style="margin-top:0">Escanea o toma foto de las órdenes, fórmulas o autorizaciones que entregó el médico. Se guardan en Drive con la visita y, a más tardar al día siguiente, aparecen como pendientes en <b>Terapias › Citas y pendientes</b>, con la fecha y lo que hay que hacer.</p>
-      ${c.k ? `${lab('Archivos', 'PDF o fotos. Puedes elegir varios.')}<input type="file" id="ordArch" accept="application/pdf,image/*" multiple>
-        ${lab('¿En qué visita o cita las entregaron?')}<select id="ordVis"><option value="">Cargando visitas del registro…</option></select>
-        <button class="btn block" style="margin-top:14px" data-act="subir-ordenes">Subir órdenes</button>`
+      <div class="card"><p class="small" style="margin-top:0">Escanea o toma foto de las órdenes, fórmulas o autorizaciones que entregó el médico. La app las lee, te muestra cada orden con lo que hay que hacer y, al confirmar, quedan en <b>Terapias › Citas y pendientes</b>. El archivo se guarda en Drive con la visita.</p>
+      ${!gemClave() ? `<div class="notice">Para que la app lea las órdenes sola, agrega tu clave de Gemini en <a href="#/ajustes">Ajustes</a>. Sin ella, el archivo solo se guarda en Drive.</div>` : ''}
+      ${c.k || gemClave() ? `${lab('Archivos', 'PDF o fotos. Puedes elegir varios.')}<input type="file" id="ordArch" accept="application/pdf,image/*" multiple>
+        ${c.k ? `${lab('¿En qué visita o cita las entregaron?')}<select id="ordVis"><option value="">Cargando visitas del registro…</option></select>` : ''}
+        <button class="btn block" style="margin-top:14px" data-act="subir-ordenes">Subir y leer órdenes</button>`
       : `<div class="notice">Primero conecta la app con «Registro con los niños» en <a href="#/ajustes">Ajustes</a>.</div>`}</div>
       ${subidas.length ? `<div class="card"><h2>Subidas recientemente</h2>${subidas.map(o => `<div class="item"><div class="t">${esc(o.nombre)}</div><div class="s">${fCorta(o.fecha)}${o.url ? ` · <a href="${esc(o.url)}" target="_blank" rel="noopener">Ver en Drive</a>` : ''}</div></div>`).join('')}</div>` : ''}`);
     if (!c.k) return;
@@ -713,6 +714,57 @@
       sel.innerHTML = vs.map(v => `<option value="${esc(v.id)}"${v === pref ? ' selected' : ''}>${fCorta(v.desde)} · ${esc(v.titulo || 'Visita')}</option>`).join('');
     }).catch(e => { const sel = document.getElementById('ordVis'); if (sel) sel.innerHTML = `<option value="">No se pudieron cargar las visitas: ${esc(e.message)}</option>`; });
   }
+  const GEM = 'seguimiento.gemini.v1';
+  const gemClave = () => { try { return localStorage.getItem(GEM) || ''; } catch (e) { return ''; } };
+  const habil = d => { let x = addDays(d, 1); while ([0, 6].includes(parseISO(x).getDay())) x = addDays(x, 1); return x; };
+  const PROMPT_ORDENES = `Lee este documento escaneado: órdenes médicas, fórmulas o autorizaciones de un niño afiliado a EPS Sanitas (Colombia).
+Devuelve SOLO JSON: {"items":[{"servicio":"","accion":"","tipo":"","autorizacion":"","interconsulta":"","prestador":"","telefono":"","direccion":"","cantidad":"","vigente_hasta":"","es_plan_terapias":false,"terapias":{"fono":0,"to":0,"psi":0,"psifam":0},"vigencia_inicio":"","vigencia_fin":""}]}
+Reglas: una entrada por orden, fórmula o autorización distinta (no repitas copias de la misma). Ignora historia clínica, notas de evolución y resultados.
+servicio: especialidad, examen, terapia o insumo, corto. accion: lo que debe hacer el padre, una de «Radicar en Sanitas», «Pedir cita», «Entregar autorización al prestador», «Programar examen», «Reclamar medicamento o insumo».
+tipo: uno de «Control médico», «Examen o procedimiento», «Valoración / evaluación», «Trámite EPS», «Otro». Fechas en formato AAAA-MM-DD o vacío.
+es_plan_terapias: true solo si es el plan de terapias integrales (fonoaudiología, terapia ocupacional, psicología); terapias = número total de sesiones de cada una (fono, to, psi = psicología individual, psifam = psicología familiar). Deja vacío lo que no aparezca; no inventes.`;
+  async function leerOrdenesGemini(f, b64) {
+    const clave = gemClave(); if (!clave) return null;
+    let ult = '';
+    for (const m of ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite']) {
+      try {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${encodeURIComponent(clave)}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ inline_data: { mime_type: f.type || 'application/pdf', data: b64 } }, { text: PROMPT_ORDENES }] }],
+            generationConfig: { responseMimeType: 'application/json', temperature: 0 } }) });
+        const j = await r.json();
+        if (!r.ok) { ult = (j.error && j.error.message) || ('HTTP ' + r.status); if (r.status === 400 || r.status === 403) break; continue; }
+        const t = (((j.candidates || [])[0] || {}).content || {}).parts || [];
+        const d = JSON.parse(t.map(p => p.text || '').join('').replace(/^```json|```$/g, '').trim());
+        return (d.items || []).map(x => Object.assign(x, { archivo: f.name }));
+      } catch (e) { ult = e.message; }
+    }
+    throw new Error(ult || 'Gemini no respondió');
+  }
+  function aPendientes(items) {
+    const abiertas = S.citas.filter(c => !c.hecho).map(c => (c.desc + ' ' + (c.notas || '')).toLowerCase());
+    const out = [];
+    items.forEach(x => {
+      const nums = [x.autorizacion, x.interconsulta].filter(Boolean).map(String);
+      if (nums.some(n => abiertas.some(a => a.includes(n.toLowerCase())))) return; // ya está
+      const notas = [x.autorizacion ? 'Autorización ' + x.autorizacion : '', x.interconsulta ? 'Interconsulta ' + x.interconsulta : '', x.cantidad ? 'Cantidad: ' + x.cantidad : '',
+        x.vigente_hasta ? 'Vigente hasta ' + x.vigente_hasta : '', 'Leído de «' + x.archivo + '» el ' + hoy()].filter(Boolean).join('. ');
+      out.push({ k: 'cita', ok: true, c: { id: 'ord-' + uid(), fecha: habil(hoy()), hora: '', tipo: CAT.tiposCita.includes(x.tipo) ? x.tipo : 'Trámite EPS',
+        desc: `${x.accion || 'Gestionar'} – ${x.servicio || 'orden médica'}${x.autorizacion ? ' (aut. ' + x.autorizacion + ')' : ''}`,
+        lugar: [x.prestador, x.direccion, x.telefono ? 'tel. ' + x.telefono : ''].filter(Boolean).join(', '), notas, hecho: false } });
+      if (x.es_plan_terapias && x.vigencia_fin) out.push({ k: 'orden', ok: true, o: x });
+    });
+    return out;
+  }
+  let EXT = [];
+  ruta(/^\/ordenes\/revisar$/, () => {
+    if (!EXT.length) return volver('#/ordenes');
+    view('Revisar órdenes leídas', `<div class="card"><p class="small" style="margin-top:0">Esto es lo que se leyó. Desmarca lo que no quieras agregar.</p>
+      ${EXT.map((e, i) => `<label class="item row" style="gap:10px"><input type="checkbox" data-ext="${i}" ${e.ok ? 'checked' : ''} style="width:22px;height:22px">
+        <div class="grow">${e.k === 'cita' ? `<div class="t">${esc(e.c.desc)}</div><div class="s">${fCorta(e.c.fecha)}${e.c.lugar ? ' · ' + esc(e.c.lugar) : ''}</div><div class="small muted">${esc(e.c.notas)}</div>`
+        : `<div class="t">Actualizar la orden de terapias</div><div class="s">${esc(e.o.vigencia_inicio || '')} a ${esc(e.o.vigencia_fin)} · fono ${e.o.terapias.fono || '—'}, TO ${e.o.terapias.to || '—'}, psicología ${e.o.terapias.psi || '—'}, familiar ${e.o.terapias.psifam || '—'}</div>`}</div></label>`).join('')}</div>
+      <div class="sticky-actions"><button class="btn" data-act="agregar-extraidas">Agregar a pendientes</button></div>`);
+  }, 'terapias', true);
   const leerB64 = f => new Promise((ok, mal) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = () => mal(r.error); r.readAsDataURL(f); });
 
   /* ================= MÁS ================= */
@@ -939,8 +991,13 @@
         <input type="text" id="cnxLink" placeholder="https://script.google.com/…?k=…" autocomplete="off" autocapitalize="off" spellcheck="false">
         <div class="grid2" style="margin-top:10px"><button class="btn sm" data-act="conectar">${cnx().k ? 'Cambiar enlace' : 'Conectar'}</button><button class="btn sm sec" data-act="sincronizar">Sincronizar ahora</button></div>
         ${cnx().k ? '<div class="grid2" style="margin-top:8px"><button class="btn sm ghost" data-act="recuperar">Recuperar desde Drive</button><button class="btn sm danger" data-act="desconectar">Desconectar</button></div>' : ''}</div>
+      <div class="card"><h2>📥 Lectura de órdenes (Gemini)</h2>
+        <p class="small muted">La clave se guarda solo en este celular; no va a Drive ni al registro. Es la misma clave de Gemini de tus bots (Google AI Studio › Get API key).</p>
+        ${gemClave() ? '<p class="small"><span class="tag ok">Clave guardada</span></p>' : ''}
+        <input type="password" id="gemClave" placeholder="${gemClave() ? 'Escribe otra para reemplazarla' : 'AIza…'}" autocomplete="off">
+        <div class="grid2" style="margin-top:10px"><button class="btn sm" data-act="gem-guardar">Guardar clave</button>${gemClave() ? '<button class="btn sm danger" data-act="gem-borrar">Quitar clave</button>' : ''}</div></div>
       <div class="sticky-actions"><button class="btn" data-act="guardar-ajustes">Guardar ajustes</button></div>
-      <p class="small muted" style="text-align:center;margin-top:20px">Versión 1.4 · Funciona sin internet una vez abierta.</p>`);
+      <p class="small muted" style="text-align:center;margin-top:20px">Versión 1.5 · Funciona sin internet una vez abierta.</p>`);
   }
 
   /* ================= Acciones ================= */
@@ -971,9 +1028,10 @@
       const fs = Array.from((document.getElementById('ordArch') || {}).files || []);
       if (!fs.length) return alert('Elige al menos un archivo (PDF o foto).');
       const id = (document.getElementById('ordVis') || {}).value;
-      if (!id) return alert('Elige la visita o cita en la que entregaron las órdenes.');
+      if (cnx().k && !id) return alert('Elige la visita o cita en la que entregaron las órdenes.');
+      if (!cnx().k && !gemClave()) return alert('Conecta la app con el registro o agrega tu clave de Gemini en Ajustes.');
       if (!navigator.onLine) return alert('Necesitas internet para subir las órdenes.');
-      b.disabled = true; let ok = 0;
+      b.disabled = true; let ok = 0, leidas = [];
       for (let i = 0; i < fs.length; i++) {
         const f = fs[i];
         b.textContent = `Subiendo ${i + 1} de ${fs.length}…`;
@@ -981,14 +1039,39 @@
         const ext = (f.name.match(/\.[a-z0-9]{2,4}$/i) || [f.type === 'application/pdf' ? '.pdf' : '.jpg'])[0].toLowerCase();
         const base = f.name.replace(/\.[^.]+$/, '').replace(/[^\w áéíóúñÁÉÍÓÚÑ-]/g, '').trim().slice(0, 60) || 'escaneo';
         const nombre = `ORDENES ${hoy()} ${base}${ext}`;
-        try {
-          const r = await llamarRegistro('foto', { id, base64: await leerB64(f), nombre, mime: f.type || 'application/pdf' });
+        const b64 = await leerB64(f);
+        if (cnx().k) try {
+          const r = await llamarRegistro('foto', { id, base64: b64, nombre, mime: f.type || 'application/pdf' });
           (S.meta.ordenes = S.meta.ordenes || []).push({ fecha: hoy(), nombre, url: (r && r.url) || '', visita: id });
           ok++;
-        } catch (e) { alert('No se pudo subir ' + f.name + ': ' + e.message); }
+        } catch (e) { alert('No se pudo guardar ' + f.name + ' en Drive: ' + e.message); }
+        if (gemClave()) {
+          b.textContent = `Leyendo ${i + 1} de ${fs.length}…`;
+          try { leidas = leidas.concat(await leerOrdenesGemini(f, b64) || []); }
+          catch (e) { alert('No se pudo leer ' + f.name + ': ' + e.message); }
+        }
       }
       S.meta.ordenes = (S.meta.ordenes || []).slice(-50);
-      save(); toast(ok ? ok + ' archivo(s) subido(s). Los pendientes aparecen a más tardar mañana.' : 'No se subió ningún archivo.'); render();
+      save();
+      EXT = aPendientes(leidas);
+      if (EXT.length) return volver('#/ordenes/revisar');
+      toast(!gemClave() ? (ok ? ok + ' archivo(s) guardado(s). Agrega tu clave de Gemini en Ajustes para que se lean solos.' : 'No se subió ningún archivo.')
+        : leidas.length ? 'Todo lo leído ya estaba en pendientes.' : 'No se encontraron órdenes en el archivo.'); render();
+    },
+    'gem-guardar'() { const v = ((document.getElementById('gemClave') || {}).value || '').trim(); if (!v) return toast('Pega la clave primero.'); try { localStorage.setItem(GEM, v); } catch (e) { } toast('Clave guardada'); render(); },
+    'gem-borrar'() { try { localStorage.removeItem(GEM); } catch (e) { } toast('Clave quitada'); render(); },
+    'agregar-extraidas'() {
+      document.querySelectorAll('[data-ext]').forEach(x => { EXT[+x.dataset.ext].ok = x.checked; });
+      let n = 0; const ahora = new Date().toISOString();
+      EXT.filter(e => e.ok).forEach(e => {
+        if (e.k === 'cita') { S.citas.push(Object.assign(e.c, { editado: ahora })); n++; }
+        else {
+          S.orden = Object.assign({}, S.orden, { inicio: e.o.vigencia_inicio || S.orden.inicio, fin: e.o.vigencia_fin });
+          ['fono', 'to', 'psi', 'psifam'].forEach(k => { const t = S.terapias.find(x => x.id === k); if (t && e.o.terapias && e.o.terapias[k]) t.ordenadas = String(e.o.terapias[k]); });
+          S.meta.ordenEditado = ahora; n++;
+        }
+      });
+      EXT = []; save(); toast(n + ' cambio(s) agregado(s)'); volver('#/terapias');
     },
     'ocultar-instalar'() { S.meta.avisoInstalar = true; save(); render(); },
     'seg-c'(b) { segConductas = b.dataset.v; render(); },

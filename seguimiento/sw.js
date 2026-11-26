@@ -1,5 +1,5 @@
 /* Service worker: permite abrir la app sin internet. Red primero, caché de respaldo. */
-const CACHE = 'seguimiento-v6';
+const CACHE = 'seguimiento-v7';
 const ARCHIVOS = ['./', './index.html', './app.js', './export.js', './vendor/jszip.min.js', './vendor/jspdf.umd.min.js', './vendor/jspdf.plugin.autotable.min.js',
   './plantillas/formato-registro-padres.docx', './manifest.webmanifest', './icons/icon.svg',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
@@ -11,7 +11,7 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
-  e.respondWith(fetch(e.request).then(r => {
+  e.respondWith(fetch(e.request.url, { cache: 'no-cache' }).then(r => {
     if (r.ok) { const copia = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copia)); }
     return r;
   }).catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('./index.html'))));
