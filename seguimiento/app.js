@@ -435,6 +435,7 @@
         <button data-go="#/sesion/nueva"><span>🗓️</span>Registrar sesión</button>
         <button data-go="#/paq"><span>📝</span>Cuestionario 6-PAQ</button>
         <button data-go="#/exportar"><span>📄</span>Exportar Word / PDF</button>
+        <button data-go="#/ordenes" style="grid-column:1/-1"><span>📥</span>Subir órdenes médicas (PDF o foto)</button>
       </div>
       <div class="card"><h2>Últimos 14 días</h2>
         <div class="grid3"><div class="stat"><b>${an.total}</b><small>conductas registradas</small></div>
@@ -639,6 +640,7 @@
     const itemCita = c => `<div class="item row"><button class="chip ${c.hecho ? 'on' : ''}" style="padding:6px 10px" data-act="cita-hecho" data-id="${c.id}" aria-label="Marcar como hecho">${c.hecho ? '✓' : '○'}</button><div class="grow" data-go="#/cita/${c.id}"><div class="t">${esc(c.desc || c.tipo || 'Pendiente')}</div><div class="s">${c.fecha ? fCorta(c.fecha) : 'Sin fecha'}${c.hora ? ' · ' + c.hora : ''}${c.tipo ? ' · ' + esc(c.tipo) : ''}${c.lugar ? ' · ' + esc(c.lugar) : ''}${!c.hecho && c.fecha && c.fecha < hoy() ? ' · <b style="color:var(--bad)">fecha pasada</b>' : ''}</div></div></div>`;
     view('Terapias y citas', `
       <div class="grid2" style="margin-bottom:12px"><button class="btn" data-go="#/sesion/nueva">＋ Sesión</button><button class="btn sec" data-go="#/cita/nueva">＋ Cita o pendiente</button></div>
+      <button class="btn sec block" style="margin-bottom:12px" data-go="#/ordenes">📥 Subir órdenes médicas</button>
       ${tarjetaTerapias(false)}
       <div class="card"><h2>Citas y pendientes</h2>${pend.length ? pend.map(itemCita).join('') : '<p class="muted small">Nada pendiente. Agrega controles médicos, exámenes (p. ej. polisomnografía, audiometría), renovación de órdenes o trámites con la EPS.</p>'}
         ${hechas.length ? `<details style="margin-top:8px"><summary class="small muted">Hechas recientemente (${hechas.length})</summary>${hechas.map(itemCita).join('')}</details>` : ''}</div>
@@ -687,12 +689,39 @@
       <div class="sticky-actions"><button class="btn" data-act="guardar-cita">Guardar</button>${ed ? `<button class="btn danger" style="flex:0 0 auto" data-act="borrar" data-col="citas" data-id="${ed.id}" data-ret="#/terapias">Eliminar</button>` : ''}</div>`);
   }
 
+  /* ----- Subir órdenes médicas -----
+     El archivo se guarda en Drive dentro de la carpeta de la visita (acción «foto» del registro), con un nombre que empieza
+     por «ORDENES». La revisión diaria lo lee, crea los pendientes y los deja en Drive; la app los trae al sincronizar. */
+  ruta(/^\/ordenes$/, vOrdenes, 'terapias', true);
+  function vOrdenes() {
+    const c = cnx();
+    const subidas = (S.meta.ordenes || []).slice(-10).reverse();
+    view('Subir órdenes médicas', `
+      <div class="card"><p class="small" style="margin-top:0">Escanea o toma foto de las órdenes, fórmulas o autorizaciones que entregó el médico. Se guardan en Drive con la visita y, a más tardar al día siguiente, aparecen como pendientes en <b>Terapias › Citas y pendientes</b>, con la fecha y lo que hay que hacer.</p>
+      ${c.k ? `${lab('Archivos', 'PDF o fotos. Puedes elegir varios.')}<input type="file" id="ordArch" accept="application/pdf,image/*" multiple>
+        ${lab('¿En qué visita o cita las entregaron?')}<select id="ordVis"><option value="">Cargando visitas del registro…</option></select>
+        <button class="btn block" style="margin-top:14px" data-act="subir-ordenes">Subir órdenes</button>`
+      : `<div class="notice">Primero conecta la app con «Registro con los niños» en <a href="#/ajustes">Ajustes</a>.</div>`}</div>
+      ${subidas.length ? `<div class="card"><h2>Subidas recientemente</h2>${subidas.map(o => `<div class="item"><div class="t">${esc(o.nombre)}</div><div class="s">${fCorta(o.fecha)}${o.url ? ` · <a href="${esc(o.url)}" target="_blank" rel="noopener">Ver en Drive</a>` : ''}</div></div>`).join('')}</div>` : ''}`);
+    if (!c.k) return;
+    llamarRegistro('lista', { todo: false }).then(l => {
+      const sel = document.getElementById('ordVis'); if (!sel) return;
+      const hoyS = hoy();
+      const vs = (l || []).filter(v => v.estado !== 'Descartada' && v.desde <= hoyS).sort((a, b) => b.desde.localeCompare(a.desde)).slice(0, 15);
+      if (!vs.length) { sel.innerHTML = '<option value="">No hay visitas recientes en el registro</option>'; return; }
+      const pref = vs.find(v => /cita|medic|control|consulta|terapia/.test(sinT(v.titulo))) || vs[0];
+      sel.innerHTML = vs.map(v => `<option value="${esc(v.id)}"${v === pref ? ' selected' : ''}>${fCorta(v.desde)} · ${esc(v.titulo || 'Visita')}</option>`).join('');
+    }).catch(e => { const sel = document.getElementById('ordVis'); if (sel) sel.innerHTML = `<option value="">No se pudieron cargar las visitas: ${esc(e.message)}</option>`; });
+  }
+  const leerB64 = f => new Promise((ok, mal) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = () => mal(r.error); r.readAsDataURL(f); });
+
   /* ================= MÁS ================= */
   ruta(/^\/mas$/, () => view('Más', `
     <div class="card">
       <div class="item" data-go="#/paq"><div class="t">📝 Cuestionario 6-PAQ</div><div class="s">Aceptación parental · 16 afirmaciones · puntaje e historial</div></div>
       <div class="item" data-go="#/objetivos"><div class="t">🎯 Objetivos y habilidades</div><div class="s">Avances en comunicación, autonomía, regulación…</div></div>
       <div class="item" data-go="#/guia"><div class="t">📘 Guía rápida</div><div class="s">Cómo llenar el registro, funciones de la conducta, flexibilidad para padres</div></div>
+      <div class="item" data-go="#/ordenes"><div class="t">📥 Subir órdenes médicas</div><div class="s">PDF escaneado o foto: se convierten solas en pendientes</div></div>
       <div class="item" data-go="#/exportar"><div class="t">📄 Exportar e informes</div><div class="s">Formato registro padres, 6-PAQ e informe de seguimiento en Word o PDF</div></div>
       <div class="item" data-go="#/respaldo"><div class="t">💾 Respaldo y datos</div><div class="s">Guardar copia, pasar datos a otro celular, combinar con el otro cuidador</div></div>
       <div class="item" data-go="#/ajustes"><div class="t">⚙️ Ajustes</div><div class="s">Nombre, cuidadores, orden y terapias</div></div>
@@ -911,7 +940,7 @@
         <div class="grid2" style="margin-top:10px"><button class="btn sm" data-act="conectar">${cnx().k ? 'Cambiar enlace' : 'Conectar'}</button><button class="btn sm sec" data-act="sincronizar">Sincronizar ahora</button></div>
         ${cnx().k ? '<div class="grid2" style="margin-top:8px"><button class="btn sm ghost" data-act="recuperar">Recuperar desde Drive</button><button class="btn sm danger" data-act="desconectar">Desconectar</button></div>' : ''}</div>
       <div class="sticky-actions"><button class="btn" data-act="guardar-ajustes">Guardar ajustes</button></div>
-      <p class="small muted" style="text-align:center;margin-top:20px">Versión 1.3 · Funciona sin internet una vez abierta.</p>`);
+      <p class="small muted" style="text-align:center;margin-top:20px">Versión 1.4 · Funciona sin internet una vez abierta.</p>`);
   }
 
   /* ================= Acciones ================= */
@@ -937,6 +966,29 @@
       b.disabled = true; b.textContent = 'Recuperando…';
       try { const r = await llamarRegistro('seguimientoRecuperar'); const n = combinar(r.datos); save(); toast(n + ' registro(s) recuperado(s) de «' + r.nombre + '»'); render(); }
       catch (e) { toast('No se pudo recuperar: ' + e.message); b.disabled = false; b.textContent = 'Recuperar desde Drive'; }
+    },
+    async 'subir-ordenes'(b) {
+      const fs = Array.from((document.getElementById('ordArch') || {}).files || []);
+      if (!fs.length) return alert('Elige al menos un archivo (PDF o foto).');
+      const id = (document.getElementById('ordVis') || {}).value;
+      if (!id) return alert('Elige la visita o cita en la que entregaron las órdenes.');
+      if (!navigator.onLine) return alert('Necesitas internet para subir las órdenes.');
+      b.disabled = true; let ok = 0;
+      for (let i = 0; i < fs.length; i++) {
+        const f = fs[i];
+        b.textContent = `Subiendo ${i + 1} de ${fs.length}…`;
+        if (f.size > 20e6) { alert(f.name + ' pesa más de 20 MB. Escanéalo en menor resolución.'); continue; }
+        const ext = (f.name.match(/\.[a-z0-9]{2,4}$/i) || [f.type === 'application/pdf' ? '.pdf' : '.jpg'])[0].toLowerCase();
+        const base = f.name.replace(/\.[^.]+$/, '').replace(/[^\w áéíóúñÁÉÍÓÚÑ-]/g, '').trim().slice(0, 60) || 'escaneo';
+        const nombre = `ORDENES ${hoy()} ${base}${ext}`;
+        try {
+          const r = await llamarRegistro('foto', { id, base64: await leerB64(f), nombre, mime: f.type || 'application/pdf' });
+          (S.meta.ordenes = S.meta.ordenes || []).push({ fecha: hoy(), nombre, url: (r && r.url) || '', visita: id });
+          ok++;
+        } catch (e) { alert('No se pudo subir ' + f.name + ': ' + e.message); }
+      }
+      S.meta.ordenes = (S.meta.ordenes || []).slice(-50);
+      save(); toast(ok ? ok + ' archivo(s) subido(s). Los pendientes aparecen a más tardar mañana.' : 'No se subió ningún archivo.'); render();
     },
     'ocultar-instalar'() { S.meta.avisoInstalar = true; save(); render(); },
     'seg-c'(b) { segConductas = b.dataset.v; render(); },

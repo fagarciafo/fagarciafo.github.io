@@ -1,5 +1,5 @@
 /* Service worker: permite abrir la app sin internet. Red primero, caché de respaldo. */
-const CACHE = 'seguimiento-v5';
+const CACHE = 'seguimiento-v6';
 const ARCHIVOS = ['./', './index.html', './app.js', './export.js', './vendor/jszip.min.js', './vendor/jspdf.umd.min.js', './vendor/jspdf.plugin.autotable.min.js',
   './plantillas/formato-registro-padres.docx', './manifest.webmanifest', './icons/icon.svg',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
