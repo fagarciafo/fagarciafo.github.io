@@ -159,13 +159,17 @@
     if (syncando) return; if (!navigator.onLine) { if (manual) toast('Sin internet: se sincroniza cuando vuelva la conexión.'); return; }
     syncando = true;
     try {
+      // 0. Actualizaciones dejadas en Drive (respuestas de Soad, órdenes escaneadas): se combinan antes de enviar.
+      let actualizados = 0;
+      try { actualizados = await traerActualizaciones(); } catch (e) { /* se intenta en la próxima */ }
       // Las sesiones que vinieron del registro no se devuelven (ya están allá).
       const r = await llamarRegistro('seguimiento', { datos: Object.assign({}, S, { sesiones: S.sesiones.filter(x => x.origen !== 'registro') }) });
       let traidas = 0;
       try { traidas = await traerDeRegistro(); } catch (e) { /* si falla, se intenta en la próxima sincronización */ }
       const c = cnx(); c.ultimo = new Date().toISOString(); c.error = ''; c.res = r; cnxGuardar(c);
       if (manual) toast('Sincronizado' + (traidas ? ': ' + traidas + ' sesión(es) traída(s) del registro' : '') + (r.registrosCreados ? (traidas ? ' y ' : ': ') + r.registrosCreados + ' registro(s) nuevo(s) allá' : '') + '.');
-      if (traidas && /^#\/(terapias|inicio)/.test(location.hash || '#/inicio')) render();
+      else if (actualizados) toast(actualizados + ' pendiente(s) actualizado(s) desde Drive');
+      if ((traidas || actualizados || c.visitaHoy === hoy()) && /^#\/(terapias|inicio)/.test(location.hash || '#/inicio')) render();
     } catch (e) {
       const c = cnx(); c.error = e.message; cnxGuardar(c);
       if (manual) toast('No se pudo sincronizar: ' + e.message);
@@ -174,9 +178,20 @@
   const cuando = t => { const d = new Date(t); return fCorta(iso(d)) + ' · ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); };
   /* Terapias anotadas en «Registro con los niños» (con su app o desde el calendario) → sesiones aquí. */
   const sinT = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  /* Respaldo más reciente de Drive → se combina aquí. Así llegan los pendientes que se actualizan fuera del celular
+     (respuestas de la mamá al correo mensual, órdenes escaneadas). Lo borrado en este celular no vuelve. */
+  async function traerActualizaciones() {
+    const r = await llamarRegistro('seguimientoRecuperar');
+    if (!r || !r.datos || !r.datos.v) return 0;
+    const n = combinar(r.datos);
+    if (n) { S.meta.modificado = new Date().toISOString(); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { } }
+    return n;
+  }
   async function traerDeRegistro() {
     const lista = await llamarRegistro('lista', { todo: false });
     const hoyS = hoy();
+    // ¿Hay visita con los niños hoy? Decide si se muestra «Diario de hoy» en Inicio.
+    const c0 = cnx(); c0.visitaHoy = (lista || []).some(v => v.estado !== 'Descartada' && v.desde <= hoyS && (v.hasta || v.desde) >= hoyS) ? hoyS : ''; cnxGuardar(c0);
     const ya = new Set(S.sesiones.map(x => x.regId).filter(Boolean));
     const ign = new Set(S.meta.regIgnorados || []);
     const cand = (lista || []).filter(v => v.estado === 'Completo' && v.hasta <= hoyS && v.desde >= '2026-10-01' &&
@@ -208,6 +223,8 @@
     return `<div class="card"><div class="row"><div class="grow"><b>☁️ Registro con los niños</b><div class="small muted">${c.ultimo ? 'Última sincronización: ' + cuando(c.ultimo) : 'Aún no se ha sincronizado'}${c.error ? '<br><span style="color:var(--bad)">Último intento falló: ' + esc(c.error) + '</span>' : ''}</div></div>
       <button class="btn sm sec" data-act="sincronizar">Sincronizar</button></div></div>`;
   }
+  // Con los niños hoy: visita en el registro, vacaciones marcadas en Ajustes o diario ya empezado.
+  const conNinosHoy = () => cnx().visitaHoy === hoy() || (S.perfil.vacHasta && hoy() <= S.perfil.vacHasta) || S.diario.some(d => d.fecha === hoy());
   const nRegistros = () => S.conductas.length + S.diario.length + S.sesiones.length + S.citas.length + S.paq.length + S.objetivos.length;
   const terapia = id => S.terapias.find(t => t.id === id) || { nombre: 'Terapia' };
   const nino = () => S.perfil.nino || 'el niño';
@@ -414,7 +431,7 @@
       ${tarjetaSync()}
       <div class="quick">
         <button class="main" data-go="#/conducta/nueva"><span>＋</span><div>Registrar una conducta<div class="small" style="opacity:.85;font-weight:500">Formato registro padres</div></div></button>
-        <button data-go="#/dia/hoy"><span>🌙</span>Diario de hoy</button>
+        ${conNinosHoy() ? '<button data-go="#/dia/hoy"><span>🌙</span>Diario de hoy</button>' : '<button data-go="#/cita/nueva"><span>📌</span>Cita o pendiente</button>'}
         <button data-go="#/sesion/nueva"><span>🗓️</span>Registrar sesión</button>
         <button data-go="#/paq"><span>📝</span>Cuestionario 6-PAQ</button>
         <button data-go="#/exportar"><span>📄</span>Exportar Word / PDF</button>
@@ -878,7 +895,8 @@
       <div class="card"><h2>Familia</h2>
         ${lab('Nombre del niño')}${inp('perfil.nino', F.perfil.nino, 'text', '')}
         ${lab('Cuidadores que registran', 'Separados por coma. Ej.: Papá, Mamá, Abuela')}${inp('cuidadoresTxt', F.cuidadoresTxt, 'text', '')}
-        ${lab('¿Quién usa este celular?', 'Se marca por defecto en cada registro.')}<div id="quien">${chips('perfil.quien', S.perfil.cuidadores, F.perfil.quien, true)}</div></div>
+        ${lab('¿Quién usa este celular?', 'Se marca por defecto en cada registro.')}<div id="quien">${chips('perfil.quien', S.perfil.cuidadores, F.perfil.quien, true)}</div>
+        ${lab('Vacaciones con los niños hasta', 'Mientras tanto, Inicio muestra «Diario de hoy» todos los días. Los demás días aparece solo cuando el registro tiene una visita.')}${inp('perfil.vacHasta', F.perfil.vacHasta || '', 'date')}</div>
       <div class="card"><h2>Orden de terapias</h2>
         ${lab('Prestador / institución')}${inp('orden.prestador', F.orden.prestador, 'text', '')}
         <div class="grid2"><div>${lab('Inicio')}${inp('orden.inicio', F.orden.inicio, 'date')}</div><div>${lab('Vence')}${inp('orden.fin', F.orden.fin, 'date')}</div></div>
@@ -893,7 +911,7 @@
         <div class="grid2" style="margin-top:10px"><button class="btn sm" data-act="conectar">${cnx().k ? 'Cambiar enlace' : 'Conectar'}</button><button class="btn sm sec" data-act="sincronizar">Sincronizar ahora</button></div>
         ${cnx().k ? '<div class="grid2" style="margin-top:8px"><button class="btn sm ghost" data-act="recuperar">Recuperar desde Drive</button><button class="btn sm danger" data-act="desconectar">Desconectar</button></div>' : ''}</div>
       <div class="sticky-actions"><button class="btn" data-act="guardar-ajustes">Guardar ajustes</button></div>
-      <p class="small muted" style="text-align:center;margin-top:20px">Versión 1.2 · Funciona sin internet una vez abierta.</p>`);
+      <p class="small muted" style="text-align:center;margin-top:20px">Versión 1.3 · Funciona sin internet una vez abierta.</p>`);
   }
 
   /* ================= Acciones ================= */
@@ -988,7 +1006,9 @@
     },
     borrar(b) {
       if (!confirm('¿Eliminar este registro? No se puede deshacer.')) return;
-      S[b.dataset.col] = S[b.dataset.col].filter(x => x.id !== b.dataset.id); save(); toast('Eliminado'); volver(b.dataset.ret);
+      S[b.dataset.col] = S[b.dataset.col].filter(x => x.id !== b.dataset.id);
+      S.meta.borrados = (S.meta.borrados || []).concat(b.dataset.id).slice(-500); // para que una actualización de Drive no lo traiga de vuelta
+      save(); toast('Eliminado'); volver(b.dataset.ret);
     },
     async 'exp-registro'(b) {
       if (F.desde > F.hasta) return alert('La fecha "desde" es posterior a "hasta".');
@@ -1070,6 +1090,7 @@
       const cuid = String(F.cuidadoresTxt || '').split(',').map(s => s.trim()).filter(Boolean);
       S.perfil = Object.assign({}, F.perfil, { nino: (F.perfil.nino || '').trim(), cuidadores: cuid.length ? cuid : ['Papá', 'Mamá'] });
       if (!S.perfil.cuidadores.includes(S.perfil.quien)) S.perfil.quien = S.perfil.cuidadores[0];
+      if (JSON.stringify(F.orden) !== JSON.stringify(S.orden)) S.meta.ordenEditado = new Date().toISOString();
       S.orden = F.orden;
       S.terapias = F.terapias.filter(t => (t.nombre || '').trim()).map(t => Object.assign(t, { nombre: t.nombre.trim() }));
       save(); toast('Ajustes guardados'); volver('#/inicio');
@@ -1081,9 +1102,10 @@
   function marcarRespaldo() { S.meta.respaldo = new Date().toISOString(); save(); }
   function combinar(d) {
     let n = 0;
+    const borrados = new Set(S.meta.borrados || []);
     ['conductas', 'diario', 'sesiones', 'citas', 'paq', 'objetivos'].forEach(k => {
       (d[k] || []).forEach(x => {
-        if (!x || !x.id) return;
+        if (!x || !x.id || borrados.has(x.id)) return;
         const i = S[k].findIndex(y => y.id === x.id);
         if (i < 0) { S[k].push(x); n++; }
         else {
@@ -1097,8 +1119,11 @@
       });
     });
     if (!S.perfil.nino && d.perfil && d.perfil.nino) S.perfil.nino = d.perfil.nino;
-    if (!S.orden.inicio && d.orden && d.orden.inicio) S.orden = d.orden;
-    (d.terapias || []).forEach(t => { const e = S.terapias.find(x => x.id === t.id); if (!e) S.terapias.push(t); else if (!e.ordenadas && t.ordenadas) e.ordenadas = t.ordenadas; });
+    const dm = d.meta || {};
+    const ordenNueva = d.orden && (dm.ordenEditado || '') > (S.meta.ordenEditado || '');
+    if (d.orden && d.orden.inicio && (!S.orden.inicio || ordenNueva) && JSON.stringify(d.orden) !== JSON.stringify(S.orden)) { S.orden = Object.assign({}, S.orden, d.orden); n++; }
+    if (ordenNueva) S.meta.ordenEditado = dm.ordenEditado;
+    (d.terapias || []).forEach(t => { const e = S.terapias.find(x => x.id === t.id); if (!e) S.terapias.push(t); else if (t.ordenadas && (!e.ordenadas || ordenNueva) && e.ordenadas !== t.ordenadas) e.ordenadas = t.ordenadas; });
     return n;
   }
 
@@ -1106,6 +1131,6 @@
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => { });
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });
   render();
-  setTimeout(() => { const c = cnx(); if (c.k && (!c.ultimo || Date.now() - Date.parse(c.ultimo) > 6 * 36e5)) sincronizar(false); }, 3000);
+  setTimeout(() => { const c = cnx(); if (c.k && (!c.ultimo || Date.now() - Date.parse(c.ultimo) > 30 * 6e4)) sincronizar(false); }, 3000);
   window.addEventListener('online', programarSync);
 })();
